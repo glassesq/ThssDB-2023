@@ -41,6 +41,6 @@ public class IO {
         }
 
         /* Write-Ahead Log */
-        WriteLog.addCommonLog(page.spaceId, page.pageId, offset, length, oldValue, newValue);
+        WriteLog.addCommonLog(page.transactionId, page.spaceId, page.pageId, offset, length, oldValue, newValue);
     }
 }

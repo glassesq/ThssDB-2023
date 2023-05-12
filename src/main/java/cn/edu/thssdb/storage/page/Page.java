@@ -8,6 +8,8 @@ import cn.edu.thssdb.runtime.ServerRuntime;
  */
 public class Page {
 
+    /* For read-only page, this field shall be ignored. */
+    public int transactionId;
     /* FIL Header */ int checksum;
 
     /**

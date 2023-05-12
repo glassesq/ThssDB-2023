@@ -8,6 +8,8 @@ public class WriteLog {
         byte[] newValue;
         byte[] oldValue;
 
+        public int transactionId;
+
         public int length;
         public int offset;
         public int pageId;
@@ -20,7 +22,8 @@ public class WriteLog {
          */
         public int type;
 
-        public WriteLogEntry(int spaceId, int pageId, int offset, int length, byte[] oldValue, byte[] newValue, boolean redo_only) {
+        public WriteLogEntry(int transactionId, int spaceId, int pageId, int offset, int length, byte[] oldValue, byte[] newValue, boolean redo_only) {
+            this.transactionId = transactionId;
             this.spaceId = spaceId;
             this.pageId = pageId;
             this.offset = offset;
@@ -34,14 +37,14 @@ public class WriteLog {
         public String toString() {
             // TODO: we may use compressed format for WAL latter, currently we use plain-text.
             // TODO: this is only for test.
-            StringBuilder result = new StringBuilder("RECORD: spaceId: " + spaceId + " pageId: " + pageId + " offset: " + offset + " length: " + length + " redo_only: " + redo_only + "\n");
+            StringBuilder result = new StringBuilder("RECORD: transactionId: " + transactionId +" spaceId: " + spaceId + " pageId: " + pageId + " offset: " + offset + " length: " + length + " redo_only: " + redo_only + "\n");
             result.append("old-value: ");
             for (byte b : this.oldValue) {
-                result.append(String.format("%02x", b));
+                result.append(String.format("%02x ", b));
             }
             result.append("\nnew-value: ");
             for (byte b : this.newValue) {
-                result.append(String.format("%02x", b));
+                result.append(String.format("%02x ", b));
             }
             return result.toString();
         }
@@ -56,6 +59,7 @@ public class WriteLog {
     /**
      * Add Common Write Log to WAL Buffer
      *
+     * @param transactionId transactionId of the operation
      * @param spaceId  spaceId
      * @param pageId   pageId
      * @param offset   offset
@@ -63,15 +67,17 @@ public class WriteLog {
      * @param oldValue old value. For undo, oldValue's length shall be 0.
      * @param newValue new value to write
      */
-    public static void addCommonLog(int spaceId, int pageId, int offset, int length, byte[] oldValue, byte[] newValue) {
+    public static void addCommonLog(int transactionId, int spaceId, int pageId, int offset, int length, byte[] oldValue, byte[] newValue) {
+        // TODO: transaction ID
         WriteLogEntry entry;
         if (oldValue.length > 0) {
-            entry = new WriteLogEntry(spaceId, pageId, offset, length, oldValue, newValue, false);
+            entry = new WriteLogEntry(transactionId, spaceId, pageId, offset, length, oldValue, newValue, false);
         } else {
-            entry = new WriteLogEntry(spaceId, pageId, offset, length, oldValue, newValue, true);
+            entry = new WriteLogEntry(transactionId, spaceId, pageId, offset, length, oldValue, newValue, true);
         }
         entry.type = 0; /* 0 for common entry */
         buffer.add(entry);
+        System.out.println(entry);
     }
 
     public static void writeAllToDisk() {
