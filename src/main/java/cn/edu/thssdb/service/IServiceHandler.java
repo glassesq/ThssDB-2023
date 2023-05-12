@@ -12,49 +12,50 @@ import cn.edu.thssdb.rpc.thrift.GetTimeReq;
 import cn.edu.thssdb.rpc.thrift.GetTimeResp;
 import cn.edu.thssdb.rpc.thrift.IService;
 import cn.edu.thssdb.rpc.thrift.Status;
+import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.utils.Global;
 import cn.edu.thssdb.utils.StatusUtil;
 import org.apache.thrift.TException;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class IServiceHandler implements IService.Iface {
 
-  private static final AtomicInteger sessionCnt = new AtomicInteger(0);
 
-  @Override
-  public GetTimeResp getTime(GetTimeReq req) throws TException {
-    GetTimeResp resp = new GetTimeResp();
-    resp.setTime(new Date().toString());
-    resp.setStatus(new Status(Global.SUCCESS_CODE));
-    return resp;
-  }
-
-  @Override
-  public ConnectResp connect(ConnectReq req) throws TException {
-    return new ConnectResp(StatusUtil.success(), sessionCnt.getAndIncrement());
-  }
-
-  @Override
-  public DisconnectResp disconnect(DisconnectReq req) throws TException {
-    return new DisconnectResp(StatusUtil.success());
-  }
-
-  @Override
-  public ExecuteStatementResp executeStatement(ExecuteStatementReq req) throws TException {
-    if (req.getSessionId() < 0) {
-      return new ExecuteStatementResp(
-          StatusUtil.fail("You are not connected. Please connect first."), false);
+    @Override
+    public GetTimeResp getTime(GetTimeReq req) throws TException {
+        GetTimeResp resp = new GetTimeResp();
+        resp.setTime(new Date().toString());
+        resp.setStatus(new Status(Global.SUCCESS_CODE));
+        return resp;
     }
-    // TODO: implement execution logic
-    LogicalPlan plan = LogicalGenerator.generate(req.statement);
-    switch (plan.getType()) {
-      case CREATE_DB:
-        System.out.println("[DEBUG] " + plan);
-        return new ExecuteStatementResp(StatusUtil.success(), false);
-      default:
+
+    @Override
+    public ConnectResp connect(ConnectReq req) throws TException {
+        long sid = ServerRuntime.newSession();
+        return new ConnectResp(StatusUtil.success(), sid);
     }
-    return null;
-  }
+
+    @Override
+    public DisconnectResp disconnect(DisconnectReq req) throws TException {
+        ServerRuntime.closeSession(req.sessionId);
+        return new DisconnectResp(StatusUtil.success());
+    }
+
+    @Override
+    public ExecuteStatementResp executeStatement(ExecuteStatementReq req) throws TException {
+
+        if (ServerRuntime.checkForSession(req.getSessionId())) {
+            return new ExecuteStatementResp(StatusUtil.fail("You are not connected. Please connect first."), false);
+        }
+
+        LogicalPlan plan = LogicalGenerator.generate(req.statement);
+        return ServerRuntime.runPlan(req.getSessionId(), plan);
+
+
+    }
 }
