@@ -2,6 +2,8 @@ package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.communication.IO;
 
+import java.util.List;
+
 public class OverallPage extends ExtentManagePage {
     /* Tablespace Header */
 
@@ -9,13 +11,13 @@ public class OverallPage extends ExtentManagePage {
      * links all available extents as a list.
      * Note: this is a one-way linked list.
      */
-    public ListBaseNode availableExtents;
+    public ListBaseNode availableExtents = new ListBaseNode();
 
     /**
      * links all full extents as a list.
      * Note: this is a one-way linked list.
      */
-    public ListBaseNode fullExtents;
+    public ListBaseNode fullExtents = new ListBaseNode();
 
     /**
      * on which the first element of availableExtents.
@@ -128,5 +130,11 @@ public class OverallPage extends ExtentManagePage {
         writeFILHeader();
         writeExtentManager();
         writeTablespace();
+    }
+
+    public void setup() {
+        // TODO: this is only for test. need to be revised.
+        parseExtentEntry();
+        parseTablespace();
     }
 }

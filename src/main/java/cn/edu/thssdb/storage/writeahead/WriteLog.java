@@ -51,7 +51,7 @@ public class WriteLog {
     /**
      * Write Ahead Log Buffer
      */
-    public static ArrayList<WriteLogEntry> buffer;
+    public static ArrayList<WriteLogEntry> buffer = new ArrayList<>();
 
     /**
      * Add Common Write Log to WAL Buffer

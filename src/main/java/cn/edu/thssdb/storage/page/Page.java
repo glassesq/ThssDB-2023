@@ -1,6 +1,7 @@
 package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.communication.IO;
+import cn.edu.thssdb.runtime.ServerRuntime;
 
 /**
  * Basic class for all page
@@ -150,7 +151,7 @@ public class Page {
     }
 
     /* raw bytes of this page. */
-    public byte[] bytes;
+    public byte[] bytes = new byte[ServerRuntime.config.pageSize];
 
     public int parseIntegerBig(int pos) {
         return ((bytes[pos] & 0xFF) << 24) | ((bytes[pos + 1] & 0xFF) << 16) | ((bytes[pos + 2] & 0xFF) << 8) | (bytes[pos + 3] & 0xFF);
@@ -222,5 +223,6 @@ public class Page {
 
     public void writeAll() {
         // TODO: checksum
+        writeFILHeader();
     }
 }

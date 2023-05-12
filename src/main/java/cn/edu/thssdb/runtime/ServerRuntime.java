@@ -5,6 +5,7 @@ import cn.edu.thssdb.plan.LogicalPlan;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import cn.edu.thssdb.utils.StatusUtil;
 
+import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -19,7 +20,7 @@ public class ServerRuntime {
     /**
      * A map from {@code sessionId} to {@code SessionRuntime}
      */
-    public static Map<Long, SessionRuntime> sessions;
+    public static HashMap<Long, SessionRuntime> sessions = new HashMap<>();
 
     private static final AtomicLong sessionCounter = new AtomicLong(0);
 
@@ -101,7 +102,7 @@ public class ServerRuntime {
     public static String getTablespaceFile(int spaceId) {
         // TODO: read from metadata file.
         // TODO: REPLACE FOR TEST
-        return "/Users/rongyi/Desktop/space1.txt";
+        return "/Users/rongyi/Desktop/tablespace1.tablespace";
     }
 
     /**

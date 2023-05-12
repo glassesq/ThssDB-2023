@@ -2,6 +2,8 @@ package cn.edu.thssdb.runtime;
 
 public class Configuration {
 
+    public final String testPath = "/Users/rongyi/Desktop";
+
     public final int pageSize = 16 * 1024;
 
     /**
