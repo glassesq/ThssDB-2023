@@ -38,6 +38,7 @@ public class Table {
         public HashMap<String, Column> columnDetails = new HashMap<>();
 
         public JSONObject object;
+        public JSONArray columnObjectArray;
 
         public String columnInfo() {
             StringBuilder buffer = new StringBuilder();
@@ -48,6 +49,28 @@ public class Table {
             return buffer.toString();
         }
 
+        /**
+         * Prepare a table metadata object with name, spaceId, tablespaceFilename.
+         * This table currently does not exist on disk. Therefore, {@code inited} is set to false.
+         * Proper tablespace filename will be allocated.
+         *
+         * @param name    table name
+         * @param spaceId tablespaceId
+         */
+        public void prepare(String name, int spaceId) {
+            this.object = new JSONObject();
+            this.columnObjectArray = new JSONArray();
+            this.object.put("columns", this.columnObjectArray);
+            this.name = name;
+            this.object.put("tableName", name);
+            this.spaceId = spaceId;
+            this.object.put("tablespaceId", spaceId);
+            this.tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
+            this.object.put("tablespaceFile", tablespaceFilename);
+            temporary = false; // TODO: temporary table.
+            inited = false;
+        }
+
         public static TableMetadata parse(JSONObject object) throws Exception {
             TableMetadata metadata = new TableMetadata();
             metadata.object = object;
@@ -55,9 +78,9 @@ public class Table {
             metadata.spaceId = object.getInt("tablespaceId");
             metadata.tablespaceFilename = object.getString("tablespaceFile");
 
-            JSONArray columnArrays = object.getJSONArray("columns");
-            for (int i = 0; i < columnArrays.length(); i++) {
-                Column column = Column.parse(columnArrays.getJSONObject(i));
+            metadata.columnObjectArray = object.getJSONArray("columns");
+            for (int i = 0; i < metadata.columnObjectArray.length(); i++) {
+                Column column = Column.parse(metadata.columnObjectArray.getJSONObject(i));
                 metadata.columnDetails.put(column.name, column);
                 metadata.columns.add(column.name);
             }
@@ -68,39 +91,44 @@ public class Table {
             return metadata;
 
         }
+
+
+        /**
+         * init this tablespace on disk (buffer). Set up file format and necessary information. Both Metadata and Tablespace Data.
+         * A suitable tablespaceId will be allocated automatically.
+         *
+         * @throws Exception init failed.
+         */
+        public void initTablespaceFile(long transactionId) throws Exception {
+            /* Tablespace File Creation */
+            String tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
+            System.out.println(tablespaceFilename);
+
+            File tablespaceFile = new File(tablespaceFilename);
+            tablespaceFile.createNewFile();
+            if (!tablespaceFile.exists()) {
+                throw new Exception("create tablespace file failed.");
+            }
+
+            new OverallPage(transactionId, spaceId, 0, false);
+            System.out.println("overall page over.");
+            new IndexPage(transactionId, spaceId, 2, false);
+            System.out.println("index root page over.");
+        }
+
+        public void addColumn(Column column) {
+            this.columns.add(column.name);
+            this.columnDetails.put(column.name, column);
+            columnObjectArray.put(column.object);
+        }
     }
 
     public TableMetadata metadata = new TableMetadata();
 
-    /**
-     * init this tablespace on disk (buffer). Set up file format and necessary information. Both Metadata and Tablespace Data.
-     * A suitable tablespaceId will be allocated automatically.
-     *
-     * @throws Exception init failed.
-     */
-    public void initTablespace(long transactionId) throws Exception {
-        this.metadata.spaceId = ServerRuntime.newTablespace();
-
-        /* Tablespace File Creation */
-        String tablespaceFilename = ServerRuntime.config.testPath + "/tablespace" + metadata.spaceId + ".tablespace";
-        System.out.println(tablespaceFilename);
-
-        File tablespaceFile = new File(tablespaceFilename);
-        tablespaceFile.createNewFile();
-        if (!tablespaceFile.exists()) {
-            throw new Exception("create tablespace file failed.");
-        }
-
-        OverallPage overallPage = new OverallPage(transactionId, this.metadata.spaceId, 0, false);
-        System.out.println("overall page over.");
-        IndexPage indexRootPage = new IndexPage(transactionId, this.metadata.spaceId, 2, false);
-        System.out.println("index root page over.");
-
-        /* These two outputs are only for test. */
-        // IO.pushWALAndPages();
-        /* Metadata File Modification */
-        // TODO: a log system for shall also be introduced.
+    public Table(TableMetadata metadata) {
+        this.metadata = metadata;
     }
+
 
     private void recover() {
         // TODO

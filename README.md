@@ -24,7 +24,7 @@
 - [x] 创建数据库 ``create database dbName;``
 - [ ] 删除数据库 ``drop database dbName;``
 - [x] 切换数据库 ``   use dbName;``
-- [ ] 创建表：实现“NOT NULL”和“PRIMARY KEY”这两个关键字，Type为Int，Long，Float，Double，String（必须给出长度）之一。主键仅在某一列定义。
+- [x] 创建表：实现“NOT NULL”和“PRIMARY KEY”这两个关键字，Type为Int，Long，Float，Double，String（必须给出长度）之一。主键仅在某一列定义。
 ```
    CREATE TABLE tableName(
    attrName1 Type1,

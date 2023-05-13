@@ -2,8 +2,10 @@ package cn.edu.thssdb.storage.writeahead;
 
 
 import cn.edu.thssdb.runtime.ServerRuntime;
+import cn.edu.thssdb.schema.Table;
 
 import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 
 public class WriteLog {
@@ -29,6 +31,7 @@ public class WriteLog {
          * ABORT(3); transaction abort;
          * CREATE_DATABASE(4); create database newValue (databaseId);
          * DELETE_DATABASE(5); delete database newValue (databaseId);
+         * CREATE_TABLE(6); create table newValue (tableId);
          */
         public int type;
 
@@ -63,6 +66,8 @@ public class WriteLog {
                     return "CREATE DATABASE RECORD: databaseName: " + new String(newValue) + " databaseId: " + databaseId;
                 case DELETE_DATABASE_LOG:
                     return "DELETE DATABASE RECORD: databaseName: " + new String(newValue) + " databaseId: " + databaseId;
+                case CREATE_TABLE_LOG:
+                    return "CREATE TABLE RECORD: databaseId: " + databaseId + " tableInfo: \n" + new String(newValue);
                 default:
                     StringBuilder result = new StringBuilder("RECORD: transactionId: " + transactionId + " spaceId: " + spaceId + " pageId: " + pageId + " offset: " + offset + " length: " + length + " redo_only: " + redo_only + "\n");
                     result.append("old-value: ");
@@ -89,9 +94,9 @@ public class WriteLog {
     public static final int COMMIT_LOG = 1;
     public static final int START_LOG = 2;
     public static final int ABORT_LOG = 3;
-
     public static final int CREATE_DATABASE_LOG = 4;
     public static final int DELETE_DATABASE_LOG = 5;
+    public static final int CREATE_TABLE_LOG = 6;
 
 
     /**
@@ -141,6 +146,13 @@ public class WriteLog {
         entry.newValue = databaseName;
         buffer.add(entry);
         // TODO: release latch for WAL updates
+    }
+
+    public static void addCreateTableLog(long transactionId, int databaseId, Table.TableMetadata metadata) {
+        WriteLogEntry entry = new WriteLogEntry(transactionId, CREATE_TABLE_LOG);
+        entry.databaseId = databaseId;
+        entry.newValue = metadata.object.toString().getBytes(StandardCharsets.UTF_8);
+        buffer.add(entry);
     }
 
 

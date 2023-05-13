@@ -31,6 +31,21 @@ public class Database {
             return metadata;
         }
 
+        /**
+         * This method create table, covering both data and metadata.
+         * Proper changes shall be done to WAL buffer as well.
+         *
+         * @param transactionId transactionId
+         * @param tableMetadata tableMetadata
+         * @throws Exception WAL error
+         */
+        public void createTable(long transactionId, Table.TableMetadata tableMetadata) throws Exception {
+            tables.put(tableMetadata.spaceId, tableMetadata);
+            object.getJSONArray("tables").put(tableMetadata.object);
+            IO.writeCreateTable(transactionId, this.databaseId, tableMetadata);
+            tableMetadata.initTablespaceFile(transactionId);
+        }
+
     }
 
     public DatabaseMetadata metadata;
@@ -69,11 +84,8 @@ public class Database {
         return database;
     }
 
-    private void deleteDatabase() {
-        // TODO
-    }
 
-    public void createTable(String name, Column[] columns) {
+    private void deleteDatabase() {
         // TODO
     }
 

@@ -20,9 +20,16 @@ package cn.edu.thssdb.parser;
 
 import cn.edu.thssdb.plan.LogicalPlan;
 import cn.edu.thssdb.plan.impl.CreateDatabasePlan;
+import cn.edu.thssdb.plan.impl.CreateTablePlan;
 import cn.edu.thssdb.plan.impl.UseDatabasePlan;
+import cn.edu.thssdb.runtime.ServerRuntime;
+import cn.edu.thssdb.schema.Column;
+import cn.edu.thssdb.schema.Table;
 import cn.edu.thssdb.sql.SQLBaseVisitor;
 import cn.edu.thssdb.sql.SQLParser;
+import cn.edu.thssdb.type.DataType;
+
+import javax.xml.crypto.Data;
 
 public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
 
@@ -31,8 +38,38 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
         return new CreateDatabasePlan(ctx.databaseName().getText());
     }
 
+    @Override
     public LogicalPlan visitUseDbStmt(SQLParser.UseDbStmtContext ctx) {
         return new UseDatabasePlan(ctx.databaseName().getText());
+    }
+
+    @Override
+    public LogicalPlan visitCreateTableStmt(SQLParser.CreateTableStmtContext ctx) {
+        Table.TableMetadata tableMetadata = new Table.TableMetadata();
+        tableMetadata.prepare(ctx.tableName().getText(), ServerRuntime.newTablespace());
+
+        for (SQLParser.ColumnDefContext columnContext : ctx.columnDef()) {
+            String name = columnContext.columnName().getText();
+            String strType = columnContext.typeName().getText();
+            DataType type = Column.str2DataType(strType);
+            int length = 0;
+            if (type == DataType.STRING) length = Integer.parseInt(strType.substring(7, strType.length() - 1));
+
+            Column column = new Column();
+            column.prepare(name, type, length);
+            for (SQLParser.ColumnConstraintContext constraintContext : columnContext.columnConstraint()) {
+                column.setConstraint(constraintContext.getText());
+            }
+            tableMetadata.addColumn(column);
+        }
+
+        int order = 0;
+        for (SQLParser.ColumnNameContext columnNameContext : ctx.tableConstraint().columnName()) {
+            tableMetadata.columnDetails.get(columnNameContext.getText()).setPrimaryKey(order);
+            ++order;
+        }
+
+        return new CreateTablePlan(tableMetadata);
     }
 
     // TODO: parser to more logical plan

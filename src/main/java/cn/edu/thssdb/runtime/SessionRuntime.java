@@ -3,6 +3,7 @@ package cn.edu.thssdb.runtime;
 import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.plan.LogicalPlan;
 import cn.edu.thssdb.plan.impl.CreateDatabasePlan;
+import cn.edu.thssdb.plan.impl.CreateTablePlan;
 import cn.edu.thssdb.plan.impl.UseDatabasePlan;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import cn.edu.thssdb.schema.Database;
@@ -46,11 +47,9 @@ public class SessionRuntime {
                     UseDatabasePlan useDatabasePlan = (UseDatabasePlan) plan;
                     if (ServerRuntime.databaseNameLookup.containsKey(useDatabasePlan.getDatabaseName())) {
                         databaseId = ServerRuntime.databaseNameLookup.get(useDatabasePlan.getDatabaseName());
-                        return new ExecuteStatementResp(StatusUtil.success("switch to database "
-                                + useDatabasePlan.getDatabaseName()), false);
+                        return new ExecuteStatementResp(StatusUtil.success("switch to database " + useDatabasePlan.getDatabaseName()), false);
                     } else {
-                        return new ExecuteStatementResp(StatusUtil.fail("cannot find database "
-                                + useDatabasePlan.getDatabaseName()), false);
+                        return new ExecuteStatementResp(StatusUtil.fail("cannot find database " + useDatabasePlan.getDatabaseName()), false);
                     }
                 default:
             }
@@ -81,12 +80,38 @@ public class SessionRuntime {
                     break;
                 default:
             }
-            if (ServerRuntime.config.auto_commit) {
-                IO.pushTransactionCommit(transactionId);
-                transactionId = -1;
-                response.status.msg = response.status.msg + "\n\nEnd of the transaction.(auto commit on).";
+
+            if (response != null) {
+                if (ServerRuntime.config.auto_commit) {
+                    IO.pushTransactionCommit(transactionId);
+                    transactionId = -1;
+                    response.status.msg = response.status.msg + "\n\nEnd of the transaction.(auto commit on).";
+                }
+                return response;
             }
-            if (response != null) return response;
+
+            Database.DatabaseMetadata currentDatabaseMetadata = ServerRuntime.databaseMetadata.get(databaseId);
+            if (currentDatabaseMetadata == null) {
+                return new ExecuteStatementResp(StatusUtil.fail("There is no active database now. Please use a database first."), false);
+            }
+
+            switch (plan.getType()) {
+                case CREATE_TABLE:
+                    CreateTablePlan createTablePlan = (CreateTablePlan) plan;
+                    currentDatabaseMetadata.createTable(transactionId, createTablePlan.tableMetadata);
+                    response = new ExecuteStatementResp(StatusUtil.success("Table " + createTablePlan.tableMetadata.name + " created."), false);
+                    break;
+                default:
+            }
+
+            if (response != null) {
+                if (ServerRuntime.config.auto_commit) {
+                    IO.pushTransactionCommit(transactionId);
+                    transactionId = -1;
+                    response.status.msg = response.status.msg + "\n\nEnd of the transaction.(auto commit on).";
+                }
+                return response;
+            }
             return new ExecuteStatementResp(StatusUtil.fail("Command not understood or implemented."), false);
         } catch (Exception e) {
             return new ExecuteStatementResp(StatusUtil.fail(e.getMessage()), false);

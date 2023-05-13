@@ -1,6 +1,7 @@
 package cn.edu.thssdb.communication;
 
 import cn.edu.thssdb.runtime.ServerRuntime;
+import cn.edu.thssdb.schema.Table;
 import cn.edu.thssdb.storage.DiskBuffer;
 import cn.edu.thssdb.storage.page.Page;
 import cn.edu.thssdb.storage.writeahead.WriteLog;
@@ -103,6 +104,11 @@ public class IO {
         // TODO: latch
         WriteLog.addSpecialDatabaseLog(transactionId, WriteLog.DELETE_DATABASE_LOG,
                 databaseId, name.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public static void writeCreateTable(long transactionId, int databaseId, Table.TableMetadata metadata) {
+        // TODO: latch
+        WriteLog.addCreateTableLog(transactionId, databaseId, metadata);
         // TODO: release latch
     }
 
