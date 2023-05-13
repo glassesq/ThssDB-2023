@@ -1,47 +1,96 @@
 package cn.edu.thssdb.schema;
 
-import cn.edu.thssdb.query.QueryResult;
-import cn.edu.thssdb.query.QueryTable;
+import cn.edu.thssdb.communication.IO;
+import cn.edu.thssdb.runtime.ServerRuntime;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
+import javax.xml.crypto.Data;
 import java.util.HashMap;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Database {
+    // private String name;
+    // ReentrantReadWriteLock lock;
 
-  private String name;
-  private HashMap<String, Table> tables;
-  ReentrantReadWriteLock lock;
+    public static class DatabaseMetadata {
+        public String name;
+        public int databaseId;
+        public HashMap<Integer, Table.TableMetadata> tables = new HashMap<>();
+        JSONObject object;
 
-  public Database(String name) {
-    this.name = name;
-    this.tables = new HashMap<>();
-    this.lock = new ReentrantReadWriteLock();
-    recover();
-  }
+        public static DatabaseMetadata parse(JSONObject object) throws Exception {
+            DatabaseMetadata metadata = new DatabaseMetadata();
+            metadata.object = object;
+            metadata.name = object.getString("databaseName");
+            metadata.databaseId = object.getInt("databaseId");
+            JSONArray tableArray = object.getJSONArray("tables");
+            for (int i = 0; i < tableArray.length(); i++) {
+                Table.TableMetadata tableMetadata = Table.TableMetadata.parse(tableArray.getJSONObject(i));
+                metadata.tables.put(tableMetadata.spaceId, tableMetadata);
+            }
+            return metadata;
+        }
 
-  private void persist() {
-    // TODO
-  }
+    }
 
-  public void create(String name, Column[] columns) {
-    // TODO
-  }
+    public DatabaseMetadata metadata;
 
-  public void drop() {
-    // TODO
-  }
+    public Database(DatabaseMetadata metadata) {
+        this.metadata = metadata;
+    }
 
-  public String select(QueryTable[] queryTables) {
-    // TODO
-    QueryResult queryResult = new QueryResult(queryTables);
-    return null;
-  }
+    private void persist() {
+        // TODO
+    }
 
-  private void recover() {
-    // TODO
-  }
+    /**
+     * create database.
+     * ServerRuntime{@code (databaseNameLookup, databaseMetadata, metadataArray)} will be automatically updated. Corresponding changes are recorded in WAL log buffer.
+     *
+     * @param transactionId transactionId
+     * @param name          name of the database
+     * @return A Database Object
+     * @throws Exception WAL error
+     */
+    public static Database createDatabase(long transactionId, String name) throws Exception {
+        if (ServerRuntime.databaseNameLookup.containsKey(name)) return null;
+        Database database = new Database(new DatabaseMetadata());
+        database.metadata.name = name;
+        database.metadata.databaseId = ServerRuntime.newDatabase();
+        database.metadata.tables = new HashMap<>();
+        ServerRuntime.databaseMetadata.put(database.metadata.databaseId, database.metadata);
+        database.metadata.object = new JSONObject();
+        database.metadata.object.put("databaseName", name);
+        database.metadata.object.put("databaseId", database.metadata.databaseId);
+        database.metadata.object.put("tables", new JSONArray());
+        ServerRuntime.metadataArray.put(database.metadata.object);
+        ServerRuntime.databaseNameLookup.put(name, database.metadata.databaseId);
+        IO.writeCreateDatabase(transactionId, name, database.metadata.databaseId);
+        return database;
+    }
 
-  public void quit() {
-    // TODO
-  }
+    private void deleteDatabase() {
+        // TODO
+    }
+
+    public void createTable(String name, Column[] columns) {
+        // TODO
+    }
+
+    public void drop() {
+        // TODO
+    }
+
+    public String select() {
+        // TODO
+        return null;
+    }
+
+    private void recover() {
+        // TODO
+    }
+
+    public void quit() {
+        // TODO
+    }
 }

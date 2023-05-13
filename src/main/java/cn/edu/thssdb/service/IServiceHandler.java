@@ -13,17 +13,11 @@ import cn.edu.thssdb.rpc.thrift.GetTimeResp;
 import cn.edu.thssdb.rpc.thrift.IService;
 import cn.edu.thssdb.rpc.thrift.Status;
 import cn.edu.thssdb.runtime.ServerRuntime;
-import cn.edu.thssdb.schema.Column;
-import cn.edu.thssdb.schema.Table;
 import cn.edu.thssdb.utils.Global;
 import cn.edu.thssdb.utils.StatusUtil;
 import org.apache.thrift.TException;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class IServiceHandler implements IService.Iface {
 
@@ -50,27 +44,12 @@ public class IServiceHandler implements IService.Iface {
 
     @Override
     public ExecuteStatementResp executeStatement(ExecuteStatementReq req) throws TException {
-
-
-        /* ONLY for Test */
-        Table table = new Table("xxx", "yyy", new Column[0]);
-        try {
-            table.initTablespace();
-        } catch (Exception e) {
-            System.out.println(e);
-        }
-        System.out.println("stop.");
-        return new ExecuteStatementResp(StatusUtil.fail("stop twice."), false);
-
-/*
-
-        if (ServerRuntime.checkForSession(req.getSessionId())) {
+        if (!ServerRuntime.checkForSession(req.getSessionId())) {
             return new ExecuteStatementResp(StatusUtil.fail("You are not connected. Please connect first."), false);
         }
 
         LogicalPlan plan = LogicalGenerator.generate(req.statement);
         return ServerRuntime.runPlan(req.getSessionId(), plan);
 
-*/
     }
 }

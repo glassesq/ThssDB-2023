@@ -2,7 +2,6 @@ package cn.edu.thssdb.server;
 
 import cn.edu.thssdb.rpc.thrift.IService;
 import cn.edu.thssdb.runtime.ServerRuntime;
-import cn.edu.thssdb.schema.Manager;
 import cn.edu.thssdb.service.IServiceHandler;
 import cn.edu.thssdb.utils.Global;
 import org.apache.thrift.server.TServer;
@@ -15,13 +14,10 @@ import org.slf4j.LoggerFactory;
 public class ThssDB {
 
     private static final Logger logger = LoggerFactory.getLogger(ThssDB.class);
-
     private static IServiceHandler handler;
     private static IService.Processor processor;
     private static TServerSocket transport;
     private static TServer server;
-
-    private Manager manager;
 
     public static ThssDB getInstance() {
         return ThssDBHolder.INSTANCE;
@@ -35,6 +31,13 @@ public class ThssDB {
     private void start() {
         handler = new IServiceHandler();
         processor = new IService.Processor(handler);
+        /* setup server runtime */
+        try {
+            ServerRuntime.setup();
+        } catch (Exception e) {
+            System.out.println("The server cannot start for some unexpected errors." + e.getMessage());
+            return;
+        }
         Runnable setup = () -> setUp(processor);
         new Thread(setup).start();
     }

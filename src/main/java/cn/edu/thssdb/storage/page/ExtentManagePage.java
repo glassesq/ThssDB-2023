@@ -44,8 +44,8 @@ public class ExtentManagePage extends Page {
          * @param page page to write
          * @param pos  offset
          */
-        public void writeOnlyBitmap(Page page, int pos) {
-            // TODO: merge for performanse consideration
+        public void writeOnlyBitmap(long transactionId, Page page, int pos) {
+            // TODO: merge for performance consideration
             byte[] newValue = new byte[8];
             newValue[0] = (byte) (pageStatus >> 56);
             newValue[1] = (byte) (pageStatus >> 48);
@@ -55,7 +55,7 @@ public class ExtentManagePage extends Page {
             newValue[5] = (byte) (pageStatus >> 16);
             newValue[6] = (byte) (pageStatus >> 8);
             newValue[7] = (byte) (pageStatus);
-            IO.write(page, pos + 12, 8, newValue, false);
+            IO.write(transactionId, page, pos + 12, 8, newValue, false);
         }
     }
 
@@ -75,17 +75,17 @@ public class ExtentManagePage extends Page {
         parseExtentEntry();
     }
 
-    public void writeExtentManager() {
+    public void writeExtentManager(long transactionId) {
         for (int i = 0; i <= 255; i++) {
-            extentEntries[i].listNode.write(this, 100 + i * 20);
-            extentEntries[i].writeOnlyBitmap(this, 100 + i * 20);
+            extentEntries[i].listNode.write(transactionId, this, 100 + i * 20);
+            extentEntries[i].writeOnlyBitmap(transactionId, this, 100 + i * 20);
         }
     }
 
     @Override
-    public void writeAll() {
-        writeFILHeader();
-        writeExtentManager();
+    public void writeAll(long transactionId) {
+        writeFILHeader(transactionId);
+        writeExtentManager(transactionId);
     }
 
 }

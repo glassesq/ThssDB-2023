@@ -1,6 +1,9 @@
 package cn.edu.thssdb.storage.writeahead;
 
 
+import cn.edu.thssdb.runtime.ServerRuntime;
+
+import java.io.FileOutputStream;
 import java.util.ArrayList;
 
 public class WriteLog {
@@ -8,7 +11,7 @@ public class WriteLog {
         byte[] newValue;
         byte[] oldValue;
 
-        public int transactionId;
+        public long transactionId;
 
         public int length;
         public int offset;
@@ -16,13 +19,25 @@ public class WriteLog {
         public int spaceId;
         public boolean redo_only;
 
+        public int databaseId;
+
         /**
          * Type of the record.
          * COMMON(0)
+         * COMMIT(1); transaction commit;
+         * START(2); transaction start;
+         * ABORT(3); transaction abort;
+         * CREATE_DATABASE(4); create database newValue (databaseId);
+         * DELETE_DATABASE(5); delete database newValue (databaseId);
          */
         public int type;
 
-        public WriteLogEntry(int transactionId, int spaceId, int pageId, int offset, int length, byte[] oldValue, byte[] newValue, boolean redo_only) {
+        public WriteLogEntry(long transactionId, int type) {
+            this.transactionId = transactionId;
+            this.type = type;
+        }
+
+        public WriteLogEntry(long transactionId, int spaceId, int pageId, int offset, int length, byte[] oldValue, byte[] newValue, boolean redo_only) {
             this.transactionId = transactionId;
             this.spaceId = spaceId;
             this.pageId = pageId;
@@ -37,19 +52,47 @@ public class WriteLog {
         public String toString() {
             // TODO: we may use compressed format for WAL latter, currently we use plain-text.
             // TODO: this is only for test.
-            StringBuilder result = new StringBuilder("RECORD: transactionId: " + transactionId +" spaceId: " + spaceId + " pageId: " + pageId + " offset: " + offset + " length: " + length + " redo_only: " + redo_only + "\n");
-            result.append("old-value: ");
-            for (byte b : this.oldValue) {
-                result.append(String.format("%02x ", b));
+            switch (type) {
+                case COMMIT_LOG:
+                    return "TRANSACTION COMMIT RECORD: transactionId: " + transactionId;
+                case START_LOG:
+                    return "TRANSACTION START RECORD: transactionId: " + transactionId;
+                case ABORT_LOG:
+                    return "TRANSACTION ABORT RECORD: transactionId: " + transactionId;
+                case CREATE_DATABASE_LOG:
+                    return "CREATE DATABASE RECORD: databaseName: " + new String(newValue) + " databaseId: " + databaseId;
+                case DELETE_DATABASE_LOG:
+                    return "DELETE DATABASE RECORD: databaseName: " + new String(newValue) + " databaseId: " + databaseId;
+                default:
+                    StringBuilder result = new StringBuilder("RECORD: transactionId: " + transactionId + " spaceId: " + spaceId + " pageId: " + pageId + " offset: " + offset + " length: " + length + " redo_only: " + redo_only + "\n");
+                    result.append("old-value: ");
+                    for (byte b : this.oldValue) {
+                        result.append(String.format("%02x ", b));
+                    }
+                    result.append("\nnew-value: ");
+                    for (byte b : this.newValue) {
+                        result.append(String.format("%02x ", b));
+                    }
+                    return result.toString();
             }
-            result.append("\nnew-value: ");
-            for (byte b : this.newValue) {
-                result.append(String.format("%02x ", b));
-            }
-            return result.toString();
+        }
+
+        public void writeToDisk() throws Exception {
+            FileOutputStream stream = new FileOutputStream(ServerRuntime.config.WALFilename, true);
+            stream.write((this + "\n").getBytes());
         }
 
     }
+
+    /* Log Type */
+    public static final int COMMON_LOG = 0;
+    public static final int COMMIT_LOG = 1;
+    public static final int START_LOG = 2;
+    public static final int ABORT_LOG = 3;
+
+    public static final int CREATE_DATABASE_LOG = 4;
+    public static final int DELETE_DATABASE_LOG = 5;
+
 
     /**
      * Write Ahead Log Buffer
@@ -60,14 +103,16 @@ public class WriteLog {
      * Add Common Write Log to WAL Buffer
      *
      * @param transactionId transactionId of the operation
-     * @param spaceId  spaceId
-     * @param pageId   pageId
-     * @param offset   offset
-     * @param length   length of bytes to write
-     * @param oldValue old value. For undo, oldValue's length shall be 0.
-     * @param newValue new value to write
+     * @param spaceId       spaceId
+     * @param pageId        pageId
+     * @param offset        offset
+     * @param length        length of bytes to write
+     * @param oldValue      old value. For undo, oldValue's length shall be 0.
+     * @param newValue      new value to write
      */
-    public static void addCommonLog(int transactionId, int spaceId, int pageId, int offset, int length, byte[] oldValue, byte[] newValue) {
+    public static void addCommonLog(long transactionId, int spaceId, int pageId, int offset, int length, byte[] oldValue, byte[] newValue) {
+        // TODO: Latch for WAL updates
+
         // TODO: transaction ID
         WriteLogEntry entry;
         if (oldValue.length > 0) {
@@ -75,13 +120,28 @@ public class WriteLog {
         } else {
             entry = new WriteLogEntry(transactionId, spaceId, pageId, offset, length, oldValue, newValue, true);
         }
-        entry.type = 0; /* 0 for common entry */
+        entry.type = COMMON_LOG; /* 0 for common entry */
         buffer.add(entry);
-        System.out.println(entry);
+
+        // TODO: release Latch for WAL updates
+//        System.out.println(entry);
     }
 
-    public static void writeAllToDisk() {
-        //TODO
-
+    public static void addSpecialLog(long transactionId, int type) {
+        // TODO: Latch for WAL updates
+        WriteLogEntry entry = new WriteLogEntry(transactionId, type);
+        buffer.add(entry);
+        // TODO: release latch for WAL updates
     }
+
+    public static void addSpecialDatabaseLog(long transactionId, int type, int databaseId, byte[] databaseName) {
+        // TODO: Latch for WAL updates
+        WriteLogEntry entry = new WriteLogEntry(transactionId, type);
+        entry.databaseId = databaseId;
+        entry.newValue = databaseName;
+        buffer.add(entry);
+        // TODO: release latch for WAL updates
+    }
+
+
 }

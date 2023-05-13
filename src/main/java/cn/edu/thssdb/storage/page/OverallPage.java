@@ -1,8 +1,8 @@
 package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.communication.IO;
+import cn.edu.thssdb.storage.DiskBuffer;
 
-import java.util.List;
 
 public class OverallPage extends ExtentManagePage {
     /* Tablespace Header */
@@ -30,6 +30,25 @@ public class OverallPage extends ExtentManagePage {
 
     public int flags;
 
+    /**
+     * create an overall page
+     *
+     * @param spaceId   spaceId
+     * @param pageId    pageId
+     * @param temporary if this is temporary
+     */
+    public OverallPage(long transactionId, int spaceId, int pageId, boolean temporary) {
+        this.spaceId = spaceId;
+        this.pageId = pageId;
+        if (!temporary) {
+            DiskBuffer.put(this);
+            setup();
+            writeAll(transactionId);
+        } else {
+            // TODO: temporary page.
+        }
+    }
+
     @Override
     public void parse() {
         parseFILHeader();
@@ -49,8 +68,10 @@ public class OverallPage extends ExtentManagePage {
 
     /**
      * write tablespace header on both disk buffer and WAL log buffer.
+     *
+     * @param transactionId transactionId requests the method
      */
-    public void writeTablespace() {
+    public void writeTablespace(long transactionId) {
         /* First 16 valid bytes */
         byte[] newValue = new byte[16];
         newValue[0] = (byte) (maxPageId >> 24);
@@ -69,11 +90,11 @@ public class OverallPage extends ExtentManagePage {
         newValue[13] = (byte) (flags >> 16);
         newValue[14] = (byte) (flags >> 8);
         newValue[15] = (byte) flags;
-        IO.write(this, 32, 16, newValue, false);
+        IO.write(transactionId, this, 32, 16, newValue, false);
         /* RESERVED 20 bytes */
         /* Two ListBaseNode */
-        availableExtents.write(this, 32 + 36);
-        fullExtents.write(this, 32 + 52);
+        availableExtents.write(transactionId, this, 32 + 36);
+        fullExtents.write(transactionId, this, 32 + 52);
     }
 
     /**
@@ -82,7 +103,7 @@ public class OverallPage extends ExtentManagePage {
      *
      * @return allocated pageId.
      */
-    public int allocatePage() throws Exception {
+    public int allocatePage(long transactionId) throws Exception {
         if (availableExtents.length == 0) {
             throw new Exception("No extent can be allocated now. Further Implementation Needed.");
         }
@@ -102,18 +123,18 @@ public class OverallPage extends ExtentManagePage {
             /* update fullExtents List */
             entry.listNode.nextPageId = fullExtents.nextPageId;
             entry.listNode.nextOffset = fullExtents.nextOffset;
-            entry.listNode.write(currentAvailableExtentManager, 100 + extentIdWithinManager * 20);
+            entry.listNode.write(transactionId, currentAvailableExtentManager, 100 + extentIdWithinManager * 20);
 
             fullExtents.length += 1;
             fullExtents.nextPageId = availableExtents.nextPageId;
             fullExtents.nextOffset = availableExtents.nextOffset;
-            fullExtents.write(this, 32 + 52);
+            fullExtents.write(transactionId, this, 32 + 52);
 
             /* update availableExtents List */
             availableExtents.length -= 1;
             availableExtents.nextPageId = nextEntryPageId;
             availableExtents.nextOffset = nextEntryOffset;
-            availableExtents.write(this, 32 + 36); /* availableExtentListNode starts from position 36 + 32 */
+            availableExtents.write(transactionId, this, 32 + 36); /* availableExtentListNode starts from position 36 + 32 */
 
             /* update currentAvailableExtentManager, on which the first element of availableExtents. */
             if (availableExtents.length > 0) {
@@ -126,10 +147,10 @@ public class OverallPage extends ExtentManagePage {
     }
 
     @Override
-    public void writeAll() {
-        writeFILHeader();
-        writeExtentManager();
-        writeTablespace();
+    public void writeAll(long transactionId) {
+        writeFILHeader(transactionId);
+        writeExtentManager(transactionId);
+        writeTablespace(transactionId);
     }
 
     public void setup() {

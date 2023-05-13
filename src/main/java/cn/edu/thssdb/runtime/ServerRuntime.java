@@ -1,12 +1,15 @@
 package cn.edu.thssdb.runtime;
 
-import cn.edu.thssdb.storage.writeahead.WriteLog;
+import cn.edu.thssdb.schema.Database;
+import cn.edu.thssdb.schema.Table;
 import cn.edu.thssdb.plan.LogicalPlan;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import cn.edu.thssdb.utils.StatusUtil;
+import org.json.JSONArray;
 
+import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -15,6 +18,29 @@ import java.util.concurrent.atomic.AtomicLong;
  * Every member variable and function shall be static in this class.
  */
 public class ServerRuntime {
+
+    /**
+     * An array shadow of all metadata.
+     */
+    public static JSONArray metadataArray;
+
+    /**
+     * From databaseId to databaseMetadata Object.
+     * Fast reference of metadata object.
+     */
+    public static HashMap<Integer, Database.DatabaseMetadata> databaseMetadata = new HashMap<>();
+
+    /**
+     * From tablespaceId to tablespaceMetadata Object.
+     * Fast reference of metadata object.
+     */
+    public static HashMap<Integer, Table.TableMetadata> tableMetadata = new HashMap<>();
+
+    /**
+     * From databaseName to databaseId Object.
+     * Fast reference of metadata object.
+     */
+    public static HashMap<String, Integer> databaseNameLookup = new HashMap<>();
 
 
     /**
@@ -28,12 +54,11 @@ public class ServerRuntime {
 
     private static final AtomicInteger tablespaceCounter = new AtomicInteger(0);
 
+    private static final AtomicInteger databaseCounter = new AtomicInteger(0);
     /**
      * Configuration of the whole server.
      */
     public static final Configuration config = new Configuration();
-
-    public static final WriteLog writeLog = new WriteLog();
 
     /**
      * increase transaction_counter by one
@@ -49,7 +74,26 @@ public class ServerRuntime {
         return tid;
     }
 
+    /**
+     * increase database_counter by one
+     *
+     * @return 4-byte new database id (unused).
+     * @throws IllegalStateException the database counter is exhausted.
+     */
+    public static int newDatabase() throws IllegalStateException {
+        int did = databaseCounter.incrementAndGet();
+        if (did == Integer.MAX_VALUE) {
+            throw new IllegalStateException("The database counter is exhausted.");
+        }
+        return did;
+    }
 
+    /**
+     * increase tablespace counter by one.
+     *
+     * @return 4-byte tablespace id (unused).
+     * @throws IllegalStateException the tablespace counter is exhausted.
+     */
     public static int newTablespace() throws IllegalStateException {
         // TODO: tablespace id can be reused
         int tid = tablespaceCounter.incrementAndGet();
@@ -60,7 +104,9 @@ public class ServerRuntime {
     }
 
     /**
-     * create a session.
+     * increase the session counter by one and prepare SessionRuntime.
+     *
+     * @return 8-byte session id of which the sessionRuntime is prepared.
      */
     public static long newSession() {
         long sessionId = sessionCounter.incrementAndGet();
@@ -100,9 +146,9 @@ public class ServerRuntime {
      * @return absolute path of the tablespace file
      */
     public static String getTablespaceFile(int spaceId) {
-        // TODO: read from metadata file.
+        // TODO: read from metadata.
         // TODO: REPLACE FOR TEST
-        return "/Users/rongyi/Desktop/tablespace1.tablespace";
+        return "/Users/rongyi/Desktop/tablespace" + spaceId + ".tablespace";
     }
 
     /**
@@ -115,9 +161,55 @@ public class ServerRuntime {
     public static ExecuteStatementResp runPlan(long sessionId, LogicalPlan plan) {
         SessionRuntime sessionRuntime = sessions.get(sessionId);
         if (sessionRuntime == null) {
-            return new ExecuteStatementResp(StatusUtil.fail("SessionRuntime does not exist for session" + sessionId + ". Uncommitted actions shall be automatically aborted. Please connect to the server again."), false);
+            return new ExecuteStatementResp(StatusUtil.fail("SessionRuntime does not exist for session" + sessionId
+                    + ". Uncommitted actions shall be automatically aborted. Please connect to the server again."), false);
         }
         return sessionRuntime.runPlan(plan);
+    }
+
+    /**
+     * setup the server.
+     * TODO: recover mechanism.
+     *
+     * @throws Exception create WALFile failed.
+     */
+    public static void setup() throws Exception {
+        File WALFile = new File(config.WALFilename);
+        WALFile.createNewFile();
+        if (!WALFile.exists()) throw new Exception("We cannot create WAL file.");
+        File metadataFile = new File(config.MetadataFilename);
+        if (!metadataFile.exists()) {
+            metadataFile.createNewFile();
+            if (!metadataFile.exists()) throw new Exception("We cannot find or create metadata file.");
+            FileOutputStream metadataStream = new FileOutputStream(config.MetadataFilename);
+            metadataStream.write("[]".getBytes());
+            metadataStream.close();
+            metadataArray = new JSONArray();
+        } else {
+            FileInputStream metadataStream = new FileInputStream(config.MetadataFilename);
+            byte[] metadataBytes = new byte[(int) metadataFile.length()];
+            metadataStream.read(metadataBytes, 0, metadataBytes.length);
+            metadataStream.close();
+            String metadataString = new String(metadataBytes, StandardCharsets.UTF_8);
+            metadataArray = new JSONArray(metadataString);
+            for (int i = 0; i < metadataArray.length(); i++) {
+                Database.DatabaseMetadata m = Database.DatabaseMetadata.parse(metadataArray.getJSONObject(i));
+                databaseMetadata.put(m.databaseId, m);
+                databaseNameLookup.put(m.name, m.databaseId);
+                if (databaseCounter.intValue() < m.databaseId) databaseCounter.set(m.databaseId);
+                for (Integer k : m.tables.keySet()) {
+                    tableMetadata.put(k, m.tables.get(k));
+                    if (tablespaceCounter.intValue() < m.tables.get(k).spaceId)
+                        tablespaceCounter.set(m.tables.get(k).spaceId);
+                }
+            }
+            /* FOR TEST */
+            System.out.println("Metadata Load Successful from " + config.MetadataFilename);
+            for (Integer k : databaseMetadata.keySet()) {
+                System.out.println("database " + databaseMetadata.get(k).databaseId + databaseMetadata.get(k).name
+                        + " with " + databaseMetadata.get(k).tables.size() + " tables");
+            }
+        }
     }
 
 

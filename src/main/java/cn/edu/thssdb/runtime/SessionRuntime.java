@@ -1,10 +1,11 @@
 package cn.edu.thssdb.runtime;
 
+import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.plan.LogicalPlan;
+import cn.edu.thssdb.plan.impl.CreateDatabasePlan;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
+import cn.edu.thssdb.schema.Database;
 import cn.edu.thssdb.utils.StatusUtil;
-
-import java.util.Date;
 
 public class SessionRuntime {
     /* The runtime of one session. */
@@ -30,42 +31,50 @@ public class SessionRuntime {
         // TODO
     }
 
+    /**
+     * run plan inter the session.
+     * create transaction if necessary.
+     *
+     * @param plan the plan to be executed.
+     * @return executeStatementResponse
+     */
     public ExecuteStatementResp runPlan(LogicalPlan plan) {
         try {
-            if (ServerRuntime.config.allow_implicit_transaction) {
-                if (transactionId < 0) {
-                    transactionId = ServerRuntime.newTransaction();
-                }
+            if (transactionId < 0 && ServerRuntime.config.allow_implicit_transaction) {
+                // automatically begin the transaction if allow_implicit_transaction is on.
+                transactionId = ServerRuntime.newTransaction();
+                IO.writeTransactionStart(transactionId);
+            } else if (transactionId < 0) {
+                return new ExecuteStatementResp(StatusUtil.fail("There is no active transaction now. Please begin a transaction first."), false);
             }
+            ExecuteStatementResp response = null;
+            System.out.println(plan); // For Test
             switch (plan.getType()) {
-                case CREATE_DB:
-                    System.out.println("[DEBUG][" + new Date() + "] " + plan);
-                    break;
                 case COMMIT:
-                    commit();
+                    IO.pushTransactionCommit(transactionId);
+                    transactionId = -1;
+                    // Commit statement shall be treated as the end of transaction. No matter it succeeds or not.
+                    // TODO: If commit failed, the transaction shall enter its abort process.
                     return new ExecuteStatementResp(StatusUtil.success("The transaction has been successfully committed."), false);
+                case CREATE_DB:
+                    CreateDatabasePlan createDatabasePlan = (CreateDatabasePlan) plan;
+                    if (Database.createDatabase(transactionId, createDatabasePlan.getDatabaseName()) == null)
+                        response = new ExecuteStatementResp(StatusUtil.fail("Database " + createDatabasePlan.getDatabaseName() + " already existed."), false);
+                    else
+                        response = new ExecuteStatementResp(StatusUtil.success("Database " + createDatabasePlan.getDatabaseName() + " created."), false);
+                    break;
                 default:
-                /*
-                ExecuteStatementResp resp =  new ExecuteStatementResp(StatusUtil.success(), true);
-                resp.addToColumnsList("string1");
-                resp.addToColumnsList("string2");
-                resp.addToRowList(new ArrayList<>(Arrays.asList("a", "b")));
-                return resp;
-                 */
             }
+            if (ServerRuntime.config.auto_commit) {
+                IO.pushTransactionCommit(transactionId);
+                transactionId = -1;
+                response.status.msg = response.status.msg + "\n\nEnd of the transaction.(auto commit on).";
+            }
+            if (response != null) return response;
             return new ExecuteStatementResp(StatusUtil.fail("Command not understood or implemented."), false);
         } catch (Exception e) {
             return new ExecuteStatementResp(StatusUtil.fail(e.getMessage()), false);
         }
     }
 
-    public void beginTransaction() throws Exception {
-
-    }
-
-    public void commit() throws Exception {
-        if (transactionId < 0) {
-            throw new Exception("There is no active transaction now. Commit failed.");
-        }
-    }
 }

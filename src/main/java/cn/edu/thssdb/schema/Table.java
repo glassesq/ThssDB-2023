@@ -1,67 +1,76 @@
 package cn.edu.thssdb.schema;
 
-import cn.edu.thssdb.index.BPlusTree;
 import cn.edu.thssdb.runtime.ServerRuntime;
-import cn.edu.thssdb.storage.DiskBuffer;
 import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.storage.page.OverallPage;
-import cn.edu.thssdb.utils.Pair;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Iterator;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.HashMap;
 
 /**
  * Table class.
  * The lifetime of this {@code Table} class object shall be only within the transaction that requested the Table.
+ * Multiple transactions may run on same Table. They obtain different Table Object which share the same TableMetadata.
+ * The shared TableMetadata Object is under the control of ServerRuntime.
  */
-public class Table implements Iterable<Row> {
-    ReentrantReadWriteLock lock;
-    private String databaseName;
-    public String tableName;
-    public ArrayList<Column> columns;
-    public BPlusTree<Entry, Row> index;
-    private int primaryIndex;
+public class Table {
+    //    ReentrantReadWriteLock lock;
 
-    /**
-     * tablespace Id.
-     */
-    public int spaceId;
 
-    /**
-     * if the table is temporary (e.g. may be created for join operation. )
-     */
-    public boolean temporary = false;
+    public static class TableMetadata {
+        public int spaceId;
+        public String name;
+        public String tablespaceFilename;
 
-    /**
-     * if the table is inited (The relevant tablespace file is already in disk buffer or disk.)
-     */
-    public boolean inited = false;
+        /**
+         * if the table is temporary (e.g. may be created for join operation. )
+         */
+        public boolean temporary = false;
 
-    /**
-     * load metadata of the table from Server Runtime.
-     *
-     * @param spaceId tablespace Id;
-     */
-    public void loadMetadata(int spaceId) {
-        this.spaceId = spaceId;
-        // TODO: read info from system
-        inited = true;
+        /**
+         * if the table is inited (The relevant tablespace file is already in disk buffer or disk.)
+         */
+        public boolean inited = false;
+        public ArrayList<String> columns = new ArrayList<>();
+        public HashMap<String, Column> columnDetails = new HashMap<>();
+
+        public JSONObject object;
+
+        public String columnInfo() {
+            StringBuilder buffer = new StringBuilder();
+            for (String column : columns) {
+                buffer.append(column);
+                buffer.append(',');
+            }
+            return buffer.toString();
+        }
+
+        public static TableMetadata parse(JSONObject object) throws Exception {
+            TableMetadata metadata = new TableMetadata();
+            metadata.object = object;
+            metadata.name = object.getString("tableName");
+            metadata.spaceId = object.getInt("tablespaceId");
+            metadata.tablespaceFilename = object.getString("tablespaceFile");
+
+            JSONArray columnArrays = object.getJSONArray("columns");
+            for (int i = 0; i < columnArrays.length(); i++) {
+                Column column = Column.parse(columnArrays.getJSONObject(i));
+                metadata.columnDetails.put(column.name, column);
+                metadata.columns.add(column.name);
+            }
+
+            /* since the tableMetadata is formed according to an existed json object, it must be on disk. */
+            metadata.temporary = false;
+            metadata.inited = true;
+            return metadata;
+
+        }
     }
 
-    /**
-     * load tablespace information from tablespace file.
-     *
-     * @param spaceId tablespace Id;
-     */
-    public void loadTableInfo(int spaceId) {
-        this.spaceId = spaceId;
-        // TODO: read information from tablespace file.
-        inited = true;
-    }
+    public TableMetadata metadata = new TableMetadata();
 
     /**
      * init this tablespace on disk (buffer). Set up file format and necessary information. Both Metadata and Tablespace Data.
@@ -69,46 +78,28 @@ public class Table implements Iterable<Row> {
      *
      * @throws Exception init failed.
      */
-    public void initTablespace() throws Exception {
-        this.spaceId = ServerRuntime.newTablespace();
+    public void initTablespace(long transactionId) throws Exception {
+        this.metadata.spaceId = ServerRuntime.newTablespace();
 
         /* Tablespace File Creation */
-        String tablespaceFilename = ServerRuntime.config.testPath + "/tablespace" + spaceId + ".tablespace";
+        String tablespaceFilename = ServerRuntime.config.testPath + "/tablespace" + metadata.spaceId + ".tablespace";
         System.out.println(tablespaceFilename);
 
         File tablespaceFile = new File(tablespaceFilename);
-        if (!tablespaceFile.createNewFile()) {
+        tablespaceFile.createNewFile();
+        if (!tablespaceFile.exists()) {
             throw new Exception("create tablespace file failed.");
         }
 
-        OverallPage overallPage = new OverallPage();
-        overallPage.setup();
-
-        overallPage.spaceId = this.spaceId;
-        overallPage.pageId = 0;
-
-        DiskBuffer.put(overallPage);
-        overallPage.writeAll();
-
-
-        IndexPage indexRootPage = new IndexPage();
-        indexRootPage.spaceId = this.spaceId;
-        indexRootPage.pageId = 2;
-        DiskBuffer.put(indexRootPage);
-        indexRootPage.writeAll();
+        OverallPage overallPage = new OverallPage(transactionId, this.metadata.spaceId, 0, false);
+        System.out.println("overall page over.");
+        IndexPage indexRootPage = new IndexPage(transactionId, this.metadata.spaceId, 2, false);
+        System.out.println("index root page over.");
 
         /* These two outputs are only for test. */
-        DiskBuffer.output(overallPage.spaceId, overallPage.pageId);
-        DiskBuffer.output(indexRootPage.spaceId, indexRootPage.pageId);
-
+        // IO.pushWALAndPages();
         /* Metadata File Modification */
         // TODO: a log system for shall also be introduced.
-    }
-
-    public Table(String databaseName, String tableName, Column[] columns) {
-        this.databaseName = databaseName;
-        this.tableName = tableName;
-        this.columns = new ArrayList<>(Arrays.asList(columns));
     }
 
     private void recover() {
@@ -136,27 +127,5 @@ public class Table implements Iterable<Row> {
         return null;
     }
 
-    private class TableIterator implements Iterator<Row> {
-        private Iterator<Pair<Entry, Row>> iterator;
-
-        TableIterator(Table table) {
-            this.iterator = table.index.iterator();
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iterator.hasNext();
-        }
-
-        @Override
-        public Row next() {
-            return iterator.next().right;
-        }
-    }
-
-    @Override
-    public Iterator<Row> iterator() {
-        return new TableIterator(this);
-    }
 
 }

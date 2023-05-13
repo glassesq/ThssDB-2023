@@ -1,28 +1,57 @@
 package cn.edu.thssdb.schema;
 
-import cn.edu.thssdb.type.ColumnType;
+import cn.edu.thssdb.type.DataType;
+import org.json.JSONObject;
 
-public class Column implements Comparable<Column> {
-  private String name;
-  private ColumnType type;
-  private int primary;
-  private boolean notNull;
-  private int maxLength;
+import javax.print.DocFlavor;
+import javax.xml.crypto.Data;
 
-  public Column(String name, ColumnType type, int primary, boolean notNull, int maxLength) {
-    this.name = name;
-    this.type = type;
-    this.primary = primary;
-    this.notNull = notNull;
-    this.maxLength = maxLength;
-  }
+public class Column {
 
-  @Override
-  public int compareTo(Column e) {
-    return name.compareTo(e.name);
-  }
+    public String name;
+    public DataType type;
+    // TODO: multiple primary keys
+    public int primary = 0;
+    public boolean notNull = false;
+    public int length;
 
-  public String toString() {
-    return name + ',' + type + ',' + primary + ',' + notNull + ',' + maxLength;
-  }
+    JSONObject object;
+
+    public String toString() {
+        return name + ',' + type + ',' + primary + ',' + notNull + ',' + length;
+    }
+
+    public static Column parse(JSONObject object) throws Exception {
+        Column column = new Column();
+        column.object = object;
+        column.name = object.getString("columnName");
+
+        String strType = object.getString("type");
+        switch (strType) {
+            case "String":
+                column.type = DataType.STRING;
+                break;
+            case "Int":
+                column.type = DataType.INT;
+                break;
+            case "Long":
+                column.type = DataType.LONG;
+                break;
+            case "Float":
+                column.type = DataType.FLOAT;
+                break;
+            case "Double":
+                column.type = DataType.DOUBLE;
+                break;
+            default:
+                throw new Exception("Unknown data type");
+        }
+
+        if (column.type == DataType.STRING) column.length = object.getInt("length");
+        if (object.has("primaryKey") && object.getBoolean("primaryKey")) column.primary = 1;
+        if (object.has("notNull") && object.getBoolean("notNull")) column.notNull = true;
+        return column;
+    }
+
+
 }

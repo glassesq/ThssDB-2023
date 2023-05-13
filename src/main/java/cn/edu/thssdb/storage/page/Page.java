@@ -8,9 +8,13 @@ import cn.edu.thssdb.runtime.ServerRuntime;
  */
 public class Page {
 
-    /* For read-only page, this field shall be ignored. */
-    public int transactionId;
-    /* FIL Header */ int checksum;
+    /* FIL Header */
+    /**
+     * checksum of the page.
+     *
+     * @deprecated not used right now for performance consideration.
+     */
+    int checksum;
 
     /**
      * spaceId is a 4-byte Unsigned Integer.
@@ -78,7 +82,7 @@ public class Page {
          * @param page on which the node resides.
          * @param pos  offset where the listNode starts.
          */
-        public void write(Page page, int pos) {
+        public void write(long transactionId, Page page, int pos) {
             byte[] newValues = new byte[16];
             /* RESERVED 6 byte for two-way linked list
             newValues[0] = (byte) (previousPageId >> 24);
@@ -94,7 +98,7 @@ public class Page {
             newValues[9] = (byte) nextPageId;
             newValues[10] = (byte) (nextOffset >> 8);
             newValues[11] = (byte) nextOffset;
-            IO.write(page, pos, 12, newValues, false);
+            IO.write(transactionId, page, pos, 12, newValues, false);
         }
 
 
@@ -127,7 +131,7 @@ public class Page {
          * @param page on which the node resides.
          * @param pos  offset where the listBaseNode starts.
          */
-        public void write(Page page, int pos) {
+        public void write(long transactionId, Page page, int pos) {
             byte[] newValues = new byte[20];
             newValues[0] = (byte) (length >> 24);
             newValues[1] = (byte) (length >> 16);
@@ -148,7 +152,7 @@ public class Page {
             newValues[13] = (byte) nextPageId;
             newValues[14] = (byte) (nextOffset >> 8);
             newValues[15] = (byte) nextOffset;
-            IO.write(page, pos, 16, newValues, false);
+            IO.write(transactionId, page, pos, 16, newValues, false);
         }
     }
 
@@ -186,7 +190,7 @@ public class Page {
     /**
      * Write FIL Header on both disk buffer and WAL log buffer.
      */
-    public void writeFILHeader() {
+    public void writeFILHeader(long transactionId) {
         byte[] newValue = new byte[32];
         // TODO: checkSum
         newValue[4] = (byte) (spaceId >> 24);
@@ -216,15 +220,15 @@ public class Page {
         newValue[29] = (byte) (nextPageId >> 16);
         newValue[30] = (byte) (nextPageId >> 8);
         newValue[31] = (byte) (nextPageId);
-        IO.write(this, 0, 32, newValue, false);
+        IO.write(transactionId, this, 0, 32, newValue, false);
     }
 
     public void parse() {
         parseFILHeader();
     }
 
-    public void writeAll() {
+    public void writeAll(long transactionId) {
         // TODO: checksum
-        writeFILHeader();
+        writeFILHeader(transactionId);
     }
 }

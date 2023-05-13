@@ -4,6 +4,9 @@ public class Configuration {
 
     public final String testPath = "/Users/rongyi/Desktop";
 
+    public final String MetadataFilename = testPath + "/" + "example.json";
+    public final String WALFilename = testPath + "/" + "WAL.log";
+
     public final int pageSize = 16 * 1024;
 
     /**
@@ -19,8 +22,8 @@ public class Configuration {
     public boolean auto_commit;
 
     public Configuration() {
-        allow_implicit_transaction = false;
-        auto_commit = false;
+        allow_implicit_transaction = true;
+        auto_commit = true;
 
         /* conflict test */
         // TODO: assert (!(allow_implicit_transaction && auto_commit));
