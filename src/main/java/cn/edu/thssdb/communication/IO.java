@@ -66,7 +66,7 @@ public class IO {
      * This method use {@code Latches} for actually page writing. The {@code latch} shall be released immediately.
      * Latch is not the same lock using in two-phase transaction.
      */
-    public static void pushWALAndPages() throws Exception {
+    private static void pushWALAndPages() throws Exception {
         // TODO: Latch for WAL
         /* push all write log records in buffer to disk */
         HashSet<Long> dirtyPages = new HashSet<>();
@@ -117,7 +117,7 @@ public class IO {
      *
      * @throws Exception write metadata file failed.
      */
-    public static void pushMetadataUpdate() throws Exception {
+    private static void pushMetadataUpdate() throws Exception {
         // TODO: Lock for Metadata File.
         FileOutputStream metadataStream = new FileOutputStream(config.MetadataFilename);
         metadataStream.write(ServerRuntime.metadataArray.toString().getBytes(StandardCharsets.UTF_8));
