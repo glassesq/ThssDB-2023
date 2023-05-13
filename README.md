@@ -21,9 +21,9 @@
  
 ###### SQL
 实现元数据管理模块后，ThssDB应当能够支持下列SQL语句（不区分大小写）：
-- [ ] 创建数据库 ``create database dbName;``
+- [x] 创建数据库 ``create database dbName;``
 - [ ] 删除数据库 ``drop database dbName;``
-- [ ] 切换数据库 ``   use dbName;``
+- [x] 切换数据库 ``   use dbName;``
 - [ ] 创建表：实现“NOT NULL”和“PRIMARY KEY”这两个关键字，Type为Int，Long，Float，Double，String（必须给出长度）之一。主键仅在某一列定义。
 ```
    CREATE TABLE tableName(
@@ -85,7 +85,7 @@ WHERE attrName=attrValue;
 - [ ] 尝试实现更高效的文件存储格式，并在设计文档中说明设计思路及原理，可以考虑以下优化点：
     - [ ] 提高I/O效率
     - [ ] 减小外存空间占用（合理的编码方式、数据压缩）
-    - [ ] 页式存储
+    - [x] 页式存储
 
 ### 查询模块
 实现查询引擎，包括SQL解析和查询执行两部分。其中，parser包给出了利用antlr4实现SQL解析的例子。框架中的query包提供了一些可能用到的基础类：

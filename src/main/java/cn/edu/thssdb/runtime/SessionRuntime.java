@@ -3,6 +3,7 @@ package cn.edu.thssdb.runtime;
 import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.plan.LogicalPlan;
 import cn.edu.thssdb.plan.impl.CreateDatabasePlan;
+import cn.edu.thssdb.plan.impl.UseDatabasePlan;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import cn.edu.thssdb.schema.Database;
 import cn.edu.thssdb.utils.StatusUtil;
@@ -13,16 +14,13 @@ public class SessionRuntime {
     /**
      * current database under the session's use.
      */
-    public String database = null;
+    public int databaseId = -1;
 
-    /* ********************* transaction ************************ */
     /**
      * current 8-byte transaction id under the session's use
      */
     public long transactionId = -1;
 
-
-    /* ********************* transaction ************************ */
 
     /**
      * stop the session.
@@ -40,6 +38,24 @@ public class SessionRuntime {
      */
     public ExecuteStatementResp runPlan(LogicalPlan plan) {
         try {
+
+            /* Transaction Free Statement. */
+            switch (plan.getType()) {
+                case USE_DATABASE:
+                    // TODO: require LOCK
+                    UseDatabasePlan useDatabasePlan = (UseDatabasePlan) plan;
+                    if (ServerRuntime.databaseNameLookup.containsKey(useDatabasePlan.getDatabaseName())) {
+                        databaseId = ServerRuntime.databaseNameLookup.get(useDatabasePlan.getDatabaseName());
+                        return new ExecuteStatementResp(StatusUtil.success("switch to database "
+                                + useDatabasePlan.getDatabaseName()), false);
+                    } else {
+                        return new ExecuteStatementResp(StatusUtil.fail("cannot find database "
+                                + useDatabasePlan.getDatabaseName()), false);
+                    }
+                default:
+            }
+
+            /* Transaction Needed Statement. */
             if (transactionId < 0 && ServerRuntime.config.allow_implicit_transaction) {
                 // automatically begin the transaction if allow_implicit_transaction is on.
                 transactionId = ServerRuntime.newTransaction();
@@ -56,7 +72,7 @@ public class SessionRuntime {
                     // Commit statement shall be treated as the end of transaction. No matter it succeeds or not.
                     // TODO: If commit failed, the transaction shall enter its abort process.
                     return new ExecuteStatementResp(StatusUtil.success("The transaction has been successfully committed."), false);
-                case CREATE_DB:
+                case CREATE_DATABASE:
                     CreateDatabasePlan createDatabasePlan = (CreateDatabasePlan) plan;
                     if (Database.createDatabase(transactionId, createDatabasePlan.getDatabaseName()) == null)
                         response = new ExecuteStatementResp(StatusUtil.fail("Database " + createDatabasePlan.getDatabaseName() + " already existed."), false);
