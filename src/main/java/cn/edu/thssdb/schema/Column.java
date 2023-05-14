@@ -106,5 +106,21 @@ public class Column {
         if (order >= 0) setConstraint("notnull");
     }
 
+    public int getLength() {
+        switch (this.type) {
+            case STRING:
+                return length;
+            case INT:
+                return 4;
+            case LONG:
+                return 8;
+            case FLOAT:
+                return 32;
+            case DOUBLE:
+                return 64;
+        }
+        return 0;
+    }
+
 
 }

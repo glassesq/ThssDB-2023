@@ -138,4 +138,15 @@ public class IO {
         // WriteLog.addSpecialLog(transactionId, WriteLog.ABORT_LOG);
         // TODO: release latch
     }
+
+    /**
+     * trace a newly created page object.
+     * this method is lock/latch free.
+     * Because it is impossible for multiple transactions to create two different pages with the same Page object.
+     *
+     * @param page page to be traced
+     */
+    public static void traceNewPage(Page page) {
+        DiskBuffer.put(page);
+    }
 }

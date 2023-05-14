@@ -73,10 +73,11 @@ public class SessionRuntime {
                     return new ExecuteStatementResp(StatusUtil.success("The transaction has been successfully committed."), false);
                 case CREATE_DATABASE:
                     CreateDatabasePlan createDatabasePlan = (CreateDatabasePlan) plan;
+                    String name = createDatabasePlan.getDatabaseName();
                     if (Database.createDatabase(transactionId, createDatabasePlan.getDatabaseName()) == null)
-                        response = new ExecuteStatementResp(StatusUtil.fail("Database " + createDatabasePlan.getDatabaseName() + " already existed."), false);
+                        response = new ExecuteStatementResp(StatusUtil.fail("Database " + name + " already existed."), false);
                     else
-                        response = new ExecuteStatementResp(StatusUtil.success("Database " + createDatabasePlan.getDatabaseName() + " created."), false);
+                        response = new ExecuteStatementResp(StatusUtil.success("Database " + name + " created."), false);
                     break;
                 default:
             }
@@ -98,8 +99,9 @@ public class SessionRuntime {
             switch (plan.getType()) {
                 case CREATE_TABLE:
                     CreateTablePlan createTablePlan = (CreateTablePlan) plan;
+                    String name = createTablePlan.tableMetadata.name;
                     currentDatabaseMetadata.createTable(transactionId, createTablePlan.tableMetadata);
-                    response = new ExecuteStatementResp(StatusUtil.success("Table " + createTablePlan.tableMetadata.name + " created."), false);
+                    response = new ExecuteStatementResp(StatusUtil.success("Table " + name + " created."), false);
                     break;
                 default:
             }

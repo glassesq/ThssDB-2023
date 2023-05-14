@@ -23,7 +23,7 @@ public class Page {
     public int spaceId;
 
     /**
-     * pageId is a 4-byte Unsigned Integer.
+     * pageId is a 4-byte POSITIVE Integer.
      * It stored in binary using big-endian.
      */
     public int pageId;
@@ -49,12 +49,13 @@ public class Page {
      * OVERALL(0),
      * EXTENT_MANAGE(1),
      * INDEX_ROOT(2),
-     * INDEX_INTERNAL(3),
-     * INDEX_LEAF(4),
-     * DATA(5),
-     * RESERVED(6)
+     * DATA(3),
      */
     int pageType;
+    public static final int OVERALL_PAGE = 0;
+    public static final int EXTENT_MANAGE_AGE = 1;
+    public static final int INDEX_PAGE = 2;
+    public static final int DATA_PAGE = 3;
 
     /**
      * List Node for Double Linked List. In form of (PageId, Offset).
@@ -164,11 +165,17 @@ public class Page {
     }
 
     public long parseLongBig(int pos) {
-        return (long) parseIntegerBig(pos) << 32 | parseIntegerBig(pos + 4);
+        return Integer.toUnsignedLong(parseIntegerBig(pos)) << 32 | parseIntegerBig(pos + 4);
     }
 
     public int parseShortBig(int pos) {
         return ((bytes[pos] & 0xFF) << 8) | (bytes[pos + 1] & 0xFF);
+    }
+
+    public long parseSevenByteBig(int pos) {
+        return (Integer.toUnsignedLong(parseIntegerBig(pos)) << 24) |
+                (Integer.toUnsignedLong(parseShortBig(pos + 4)) << 8) |
+                Integer.toUnsignedLong(bytes[pos + 6] & 0xFF);
     }
 
     // TODO: check for CHECKSUM
@@ -189,6 +196,8 @@ public class Page {
 
     /**
      * Write FIL Header on both disk buffer and WAL log buffer.
+     *
+     * @param transactionId transactionId
      */
     public void writeFILHeader(long transactionId) {
         byte[] newValue = new byte[32];
@@ -223,12 +232,10 @@ public class Page {
         IO.write(transactionId, this, 0, 32, newValue, false);
     }
 
+    /**
+     * Parse the page from {@code page.bytes}.
+     */
     public void parse() {
         parseFILHeader();
-    }
-
-    public void writeAll(long transactionId) {
-        // TODO: checksum
-        writeFILHeader(transactionId);
     }
 }

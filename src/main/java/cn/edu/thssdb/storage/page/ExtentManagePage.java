@@ -82,10 +82,4 @@ public class ExtentManagePage extends Page {
         }
     }
 
-    @Override
-    public void writeAll(long transactionId) {
-        writeFILHeader(transactionId);
-        writeExtentManager(transactionId);
-    }
-
 }

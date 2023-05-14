@@ -1,7 +1,6 @@
 package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.communication.IO;
-import cn.edu.thssdb.storage.DiskBuffer;
 
 
 public class OverallPage extends ExtentManagePage {
@@ -37,16 +36,20 @@ public class OverallPage extends ExtentManagePage {
      * @param pageId    pageId
      * @param temporary if this is temporary
      */
-    public OverallPage(long transactionId, int spaceId, int pageId, boolean temporary) {
-        this.spaceId = spaceId;
-        this.pageId = pageId;
+    public static OverallPage createOverallPage(long transactionId, int spaceId, int pageId, boolean temporary) {
+        OverallPage overallPage = new OverallPage();
+        overallPage.spaceId = spaceId;
+        overallPage.pageId = pageId;
         if (!temporary) {
-            DiskBuffer.put(this);
-            setup();
-            writeAll(transactionId);
+            IO.traceNewPage(overallPage);
+            overallPage.setup();
+            overallPage.writeFILHeader(transactionId);
+            overallPage.writeTablespace(transactionId);
+            overallPage.writeExtentManager(transactionId);
         } else {
             // TODO: temporary page.
         }
+        return overallPage;
     }
 
     @Override
@@ -144,13 +147,6 @@ public class OverallPage extends ExtentManagePage {
             }
         }
         return allocatedPageId;
-    }
-
-    @Override
-    public void writeAll(long transactionId) {
-        writeFILHeader(transactionId);
-        writeExtentManager(transactionId);
-        writeTablespace(transactionId);
     }
 
     public void setup() {

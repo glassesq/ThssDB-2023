@@ -126,9 +126,7 @@ WHERE attrName=attrValue;
 
 负责SQL解析的Parser包提供了一些可能用于生成语法树的基础类，同学可根据需要新增SQL语句：
 
-- parser/ImpVisitor类处理语法树，语法树的根结点对应一个数据操纵语句即DML语句（select_stmt,
-  delete_stmt等），parser/ImpVisitor类根据树根结点选择不同函数分别执行（visitSelect_stmt调用query/QueryTable类，delete_stmt调用schema/Manager类等）。ImpVisitor类中已经给出实现实例（Drop
-  Table等），请完成剩余部分。
+- parser/ImpVisitor类处理语法树，语法树的根结点对应一个数据操纵语句即DML语句（select_stmt, delete_stmt等）
 
 When modifying data, the transaction shall create its temporary *playground*.
 

@@ -19,8 +19,12 @@ import java.util.HashMap;
 public class Table {
     //    ReentrantReadWriteLock lock;
 
-
     public static class TableMetadata {
+        // TODO: Lock is allocated at the unit of transaction.
+
+        /**
+         * spaceId is a positive integer.
+         */
         public int spaceId;
         public String name;
         public String tablespaceFilename;
@@ -47,6 +51,42 @@ public class Table {
                 buffer.append(',');
             }
             return buffer.toString();
+        }
+
+        public int getPrimaryKeyLength() {
+            int count = 0;
+            for (String column : columns) {
+                if (columnDetails.get(column).primary >= 0) {
+                    count += columnDetails.get(column).getLength();
+                }
+            }
+            return count;
+        }
+
+        public int getNonPrimaryKeyLength() {
+            int count = 0;
+            for (String column : columns) {
+                if (columnDetails.get(column).primary < 0) {
+                    count += columnDetails.get(column).getLength();
+                }
+            }
+            return count;
+        }
+
+        /**
+         * get the length of nullBitmap for this table
+         *
+         * @return number of bytes
+         */
+        public int getNullBitmapLengthInByte() {
+            int count = 0;
+            for (String column : columns) {
+                if (!columnDetails.get(column).notNull) {
+                    count++;
+                }
+            }
+            /* ceil */
+            return ((count + 7) / 8);
         }
 
         /**
@@ -110,9 +150,9 @@ public class Table {
                 throw new Exception("create tablespace file failed.");
             }
 
-            new OverallPage(transactionId, spaceId, 0, false);
+            OverallPage.createOverallPage(transactionId, spaceId, 0, false);
             System.out.println("overall page over.");
-            new IndexPage(transactionId, spaceId, 2, false);
+            IndexPage.createIndexPage(transactionId, spaceId, 2, false);
             System.out.println("index root page over.");
         }
 
@@ -123,7 +163,7 @@ public class Table {
         }
     }
 
-    public TableMetadata metadata = new TableMetadata();
+    public TableMetadata metadata;
 
     public Table(TableMetadata metadata) {
         this.metadata = metadata;

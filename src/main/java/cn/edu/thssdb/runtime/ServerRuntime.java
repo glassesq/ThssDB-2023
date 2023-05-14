@@ -169,6 +169,7 @@ public class ServerRuntime {
 
     /**
      * setup the server.
+     * The lock is <b>not</b> required right now. It is under start-up process. Multiple transactions are impossible.
      * TODO: recover mechanism.
      *
      * @throws Exception create WALFile failed.
@@ -193,7 +194,7 @@ public class ServerRuntime {
             String metadataString = new String(metadataBytes, StandardCharsets.UTF_8);
             metadataArray = new JSONArray(metadataString);
             for (int i = 0; i < metadataArray.length(); i++) {
-                Database.DatabaseMetadata m = Database.DatabaseMetadata.parse(metadataArray.getJSONObject(i));
+                Database.DatabaseMetadata m = Database.DatabaseMetadata.createDatabaseMetadata(metadataArray.getJSONObject(i));
                 databaseMetadata.put(m.databaseId, m);
                 databaseNameLookup.put(m.name, m.databaseId);
                 if (databaseCounter.intValue() < m.databaseId) databaseCounter.set(m.databaseId);

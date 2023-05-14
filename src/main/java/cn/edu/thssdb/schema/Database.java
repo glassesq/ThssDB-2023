@@ -18,7 +18,15 @@ public class Database {
         public HashMap<Integer, Table.TableMetadata> tables = new HashMap<>();
         JSONObject object;
 
-        public static DatabaseMetadata parse(JSONObject object) throws Exception {
+        /**
+         * create a new database metadata using existing JSONObject.
+         * The lock is not required.
+         *
+         * @param object JSON object
+         * @return new databaseMetadata
+         * @throws Exception JSON error
+         */
+        public static DatabaseMetadata createDatabaseMetadata(JSONObject object) throws Exception {
             DatabaseMetadata metadata = new DatabaseMetadata();
             metadata.object = object;
             metadata.name = object.getString("databaseName");
@@ -34,6 +42,7 @@ public class Database {
         /**
          * This method create table, covering both data and metadata.
          * Proper changes shall be done to WAL buffer as well.
+         * The lock is not required. Only the transaction requested this method can access tableMetadata now. It will not affect other tables.
          *
          * @param transactionId transactionId
          * @param tableMetadata tableMetadata
@@ -61,6 +70,7 @@ public class Database {
     /**
      * create database.
      * ServerRuntime{@code (databaseNameLookup, databaseMetadata, metadataArray)} will be automatically updated. Corresponding changes are recorded in WAL log buffer.
+     * TODO: lock
      *
      * @param transactionId transactionId
      * @param name          name of the database
@@ -68,6 +78,7 @@ public class Database {
      * @throws Exception WAL error
      */
     public static Database createDatabase(long transactionId, String name) throws Exception {
+        // TODO: lock for databaseMetadata
         if (ServerRuntime.databaseNameLookup.containsKey(name)) return null;
         Database database = new Database(new DatabaseMetadata());
         database.metadata.name = name;

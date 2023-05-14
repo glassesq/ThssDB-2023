@@ -17,7 +17,7 @@ public class DiskBuffer {
     public static HashMap<Long, Page> buffer = new HashMap<>();
 
     public static long concat(int spaceId, int pageId) {
-        return (long) spaceId << 32 | pageId;
+        return (Integer.toUnsignedLong(spaceId) << 32) | pageId;
     }
 
     /**
