@@ -44,6 +44,7 @@ public class IO {
         /* Write the changes to disk buffer */
         boolean dirty = false;
         byte[] oldValue = new byte[0];
+        byte[] realNewValue = new byte[length]; /* in case newValue.length != length */
         if (!redo_only) {
             oldValue = new byte[length];
             for (int i = offset, s = 0; i < offset + length; i++, s++) {
@@ -52,12 +53,13 @@ public class IO {
                 }
                 oldValue[s] = page.bytes[i];
                 page.bytes[i] = newValue[s];
+                realNewValue[s] = newValue[s];
             }
         }
         /* Write-Ahead Log */
         /* only add write log when there is actually change. */
         if (dirty)
-            WriteLog.addCommonLog(transactionId, page.spaceId, page.pageId, offset, length, oldValue, newValue);
+            WriteLog.addCommonLog(transactionId, page.spaceId, page.pageId, offset, length, oldValue, realNewValue);
         // TODO: release Latch (may be advanced)
     }
 
@@ -95,15 +97,13 @@ public class IO {
 
     public static void writeCreateDatabase(long transactionId, String name, int databaseId) throws Exception {
         // TODO: latch
-        WriteLog.addSpecialDatabaseLog(transactionId, WriteLog.CREATE_DATABASE_LOG,
-                databaseId, name.getBytes(StandardCharsets.UTF_8));
+        WriteLog.addSpecialDatabaseLog(transactionId, WriteLog.CREATE_DATABASE_LOG, databaseId, name.getBytes(StandardCharsets.UTF_8));
         // TODO: release latch
     }
 
     public static void writeDeleteDatabase(long transactionId, String name, int databaseId) throws Exception {
         // TODO: latch
-        WriteLog.addSpecialDatabaseLog(transactionId, WriteLog.DELETE_DATABASE_LOG,
-                databaseId, name.getBytes(StandardCharsets.UTF_8));
+        WriteLog.addSpecialDatabaseLog(transactionId, WriteLog.DELETE_DATABASE_LOG, databaseId, name.getBytes(StandardCharsets.UTF_8));
     }
 
     public static void writeCreateTable(long transactionId, int databaseId, Table.TableMetadata metadata) {
