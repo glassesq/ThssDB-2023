@@ -29,8 +29,6 @@ import cn.edu.thssdb.sql.SQLBaseVisitor;
 import cn.edu.thssdb.sql.SQLParser;
 import cn.edu.thssdb.type.DataType;
 
-import javax.xml.crypto.Data;
-
 public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
 
     @Override
@@ -43,6 +41,12 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
         return new UseDatabasePlan(ctx.databaseName().getText());
     }
 
+    /**
+     * visit create-table statement and prepare a metadata for it.
+     * This metadata is not managed by ServerRuntime by now.
+     * @param ctx the parse tree
+     * @return plan of create-table statement
+     */
     @Override
     public LogicalPlan visitCreateTableStmt(SQLParser.CreateTableStmtContext ctx) {
         Table.TableMetadata tableMetadata = new Table.TableMetadata();
@@ -53,7 +57,9 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
             String strType = columnContext.typeName().getText();
             DataType type = Column.str2DataType(strType);
             int length = 0;
-            if (type == DataType.STRING) length = Integer.parseInt(strType.substring(7, strType.length() - 1));
+            if (type == DataType.STRING) length =
+                    Integer.parseInt(strType.substring(7, strType.length() - 1)) * ServerRuntime.config.maxCharsetLength;
+            /* additional length are required for charset */
 
             Column column = new Column();
             column.prepare(name, type, length);

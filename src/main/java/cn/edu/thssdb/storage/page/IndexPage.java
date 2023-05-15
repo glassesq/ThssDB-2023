@@ -5,6 +5,7 @@ import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.schema.Table;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 
 public class IndexPage extends Page {
 
@@ -12,7 +13,7 @@ public class IndexPage extends Page {
      * recordEntry is only for storage purpose.
      * the actual values of primary/non-primary fields shall be accessed other way.
      */
-    private static class RecordInPage {
+    public static class RecordInPage {
         /* public ArrayList<int> variableFieldLength; */
         public byte[] nullBitmap;
         public byte flags;
@@ -36,6 +37,7 @@ public class IndexPage extends Page {
 
         public static RecordInPage createRecordInPageEntry(byte recordType, int primaryKeyLength, int nonPrimaryKeyLength, int nullBitmapLength, int nextAbsoluteOffset) {
             RecordInPage entry = new RecordInPage();
+            entry.recordType = recordType;
             switch (recordType) {
                 case SYSTEM_INFIMUM_RECORD:
                     entry.primaryKeys = "in".getBytes(StandardCharsets.US_ASCII);
@@ -69,7 +71,7 @@ public class IndexPage extends Page {
         /**
          * parse **every** filed of record.
          * primary keys and non-primary keys are stored in bytes[].
-         * parse recursively until it meets a SYSTEM_SUPREME_LOG
+         * parse until it meets a SYSTEM_SUPREME_LOG
          *
          * @param page                page
          * @param pos                 basic position
@@ -77,7 +79,7 @@ public class IndexPage extends Page {
          * @param nonPrimaryKeyLength nonPrimaryKeyLength
          * @param nullBitmapLength    nullBitmapLength (in byte)
          */
-        public void parseRecursivelyDeeplyInPage(Page page, int pos, int primaryKeyLength, int nonPrimaryKeyLength, int nullBitmapLength) {
+        public void parseDeeplyInPage(Page page, int pos, int primaryKeyLength, int nonPrimaryKeyLength, int nullBitmapLength) {
             /* variable length */
             this.flags = (byte) (page.bytes[pos - 4] & 0xF0);
             this.numberRecordOwnedInDirectory = (byte) (page.bytes[pos - 4] & 0x0F);
@@ -95,8 +97,7 @@ public class IndexPage extends Page {
                     this.primaryKeys = "in".getBytes(StandardCharsets.US_ASCII);
                     this.nonPrimaryKeys = new byte[0];
                     this.nullBitmap = new byte[0];
-                    parseRecursivelyDeeplyInPage(page, this.nextAbsoluteOffset, primaryKeyLength,
-                            nonPrimaryKeyLength, nullBitmapLength);
+//                    parseRecursivelyDeeplyInPage(page, this.nextAbsoluteOffset, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
                     break;
                 case (USER_POINTER_RECORD):
                     this.primaryKeys = new byte[primaryKeyLength];
@@ -104,8 +105,7 @@ public class IndexPage extends Page {
                     this.nonPrimaryKeys = new byte[0];
                     this.childPageId = page.parseIntegerBig(pos + primaryKeyLength);
                     this.nullBitmap = new byte[0];
-                    parseRecursivelyDeeplyInPage(page, this.nextAbsoluteOffset, primaryKeyLength,
-                            nonPrimaryKeyLength, nullBitmapLength);
+//                    parseRecursivelyDeeplyInPage(page, this.nextAbsoluteOffset, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
                     break;
                 case (USER_DATA_RECORD):
                     this.primaryKeys = new byte[primaryKeyLength];
@@ -118,8 +118,7 @@ public class IndexPage extends Page {
                     this.nullBitmap = new byte[nullBitmapLength];
                     System.arraycopy(page.bytes, pos - 4 - nullBitmapLength,
                             this.nullBitmap, 0, nullBitmapLength);
-                    parseRecursivelyDeeplyInPage(page, this.nextAbsoluteOffset, primaryKeyLength,
-                            nonPrimaryKeyLength, nullBitmapLength);
+//                    parseRecursivelyDeeplyInPage(page, this.nextAbsoluteOffset, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
                     break;
             }
         }
@@ -184,6 +183,31 @@ public class IndexPage extends Page {
                     break;
             }
         }
+
+        @Override
+        public String toString() {
+            StringBuilder result = new StringBuilder("RecordInPage " +
+                    "flags=" + flags +
+                    ", numberRecordOwnedInDirectory=" + numberRecordOwnedInDirectory +
+                    ", recordType=" + recordType +
+                    ", nextAbsoluteOffset=" + nextAbsoluteOffset +
+                    ", updateTransactionId=" + updateTransactionId +
+                    ", rollPointer=" + rollPointer +
+                    ", childPageId=" + childPageId);
+            result.append("\nprimaryKeys=\n");
+            for (byte b : this.primaryKeys) {
+                result.append(String.format("%02x ", b));
+            }
+            result.append("\nnonPrimaryKeys=\n");
+            for (byte b : this.nonPrimaryKeys) {
+                result.append(String.format("%02x ", b));
+            }
+            result.append("\nnullBitmap=\n");
+            for (byte b : this.nullBitmap) {
+                result.append(String.format("%02x ", b));
+            }
+            return result.toString();
+        }
     }
 
     public int pageLevel = 0;
@@ -199,7 +223,7 @@ public class IndexPage extends Page {
     public int numberValidRecords = 0;
     public long maxTransactionId = 0;
 
-    RecordInPage infimumRecord = new RecordInPage();
+    RecordInPage infimumRecord;
     RecordInPage supremeRecord;
 
     /**
@@ -282,15 +306,38 @@ public class IndexPage extends Page {
      * <b> The {@code parse()} method shall be called in advance for this method to work.</b>
      *
      * @param transactionId transaction that request this method
+     * @return records including infimumRecord and supremeRecord.
      */
-    public void parseAllRecordsInPage(long transactionId) {
+    public ArrayList<RecordInPage> parseAllRecordsInPage(long transactionId) {
         Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
         int primaryKeyLength = metadata.getPrimaryKeyLength();
         int nonPrimaryKeyLength = metadata.getNonPrimaryKeyLength();
         int nullBitmapLength = metadata.getNullBitmapLengthInByte();
-        infimumRecord.parseRecursivelyDeeplyInPage(this, 52 + 4, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
+
+        int currentPos = 52 + 4;
+        infimumRecord = new RecordInPage();
+
+        RecordInPage record = infimumRecord;
+        ArrayList<RecordInPage> recordList = new ArrayList<>();
+        while (true) {
+            System.out.println("currentPos:"+ currentPos);
+            record.parseDeeplyInPage(this, currentPos, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
+            System.out.println(record);
+            recordList.add(record);
+            if (currentPos == 52 + 10) {
+                supremeRecord = record;
+                break;
+            }
+            currentPos = record.nextAbsoluteOffset;
+            System.out.println("offset: " + record.nextAbsoluteOffset);
+            record = new RecordInPage();
+        }
+        return recordList;
     }
 
+    /**
+     * set up an empty index Page.
+     */
     public void setup() {
         infimumRecord = RecordInPage.createRecordInPageEntry(RecordInPage.SYSTEM_INFIMUM_RECORD,
                 0, 0, 0, 52 + 10);

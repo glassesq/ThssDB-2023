@@ -132,7 +132,6 @@ public class Table {
 
         }
 
-
         /**
          * init this tablespace on disk (buffer). Set up file format and necessary information. Both Metadata and Tablespace Data.
          * A suitable tablespaceId will be allocated automatically.
@@ -145,6 +144,7 @@ public class Table {
             System.out.println(tablespaceFilename);
 
             File tablespaceFile = new File(tablespaceFilename);
+            // TODO: delete file if already existed.
             tablespaceFile.createNewFile();
             if (!tablespaceFile.exists()) {
                 throw new Exception("create tablespace file failed.");
@@ -152,7 +152,7 @@ public class Table {
 
             OverallPage.createOverallPage(transactionId, spaceId, 0, false);
             System.out.println("overall page over.");
-            IndexPage.createIndexPage(transactionId, spaceId, 2, false);
+            IndexPage indexPage = IndexPage.createIndexPage(transactionId, spaceId, 2, false);
             System.out.println("index root page over.");
         }
 
@@ -165,17 +165,26 @@ public class Table {
 
     public TableMetadata metadata;
 
-    public Table(TableMetadata metadata) {
-        this.metadata = metadata;
+    public Table(TableMetadata tableMetadata, boolean isolated) {
+        if (isolated) {
+            /* This table is only temporary. */
+            // TODO: deep copy of tableMetadata
+        } else {
+            this.metadata = tableMetadata;
+        }
     }
-
 
     private void recover() {
         // TODO
     }
 
-    public void insert() {
+    public void insertRecord(long transactionId, ArrayList<byte[]> values) {
         // TODO
+        /* computed inner table. */
+
+
+        /* check for constraint */
+        // TODO: constraint lock
     }
 
     public void delete() {
@@ -190,7 +199,7 @@ public class Table {
         // TODO
     }
 
-    private ArrayList<Row> deserialize() {
+    private ArrayList<RecordLogical> deserialize() {
         // TODO
         return null;
     }

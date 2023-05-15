@@ -74,7 +74,7 @@ public class SessionRuntime {
                 case CREATE_DATABASE:
                     CreateDatabasePlan createDatabasePlan = (CreateDatabasePlan) plan;
                     String name = createDatabasePlan.getDatabaseName();
-                    if (Database.createDatabase(transactionId, createDatabasePlan.getDatabaseName()) == null)
+                    if (Database.DatabaseMetadata.createDatabase(transactionId, createDatabasePlan.getDatabaseName()) == null)
                         response = new ExecuteStatementResp(StatusUtil.fail("Database " + name + " already existed."), false);
                     else
                         response = new ExecuteStatementResp(StatusUtil.success("Database " + name + " created."), false);

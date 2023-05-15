@@ -5,13 +5,11 @@ import cn.edu.thssdb.runtime.ServerRuntime;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-import javax.xml.crypto.Data;
 import java.util.HashMap;
 
 public class Database {
     // private String name;
     // ReentrantReadWriteLock lock;
-
     public static class DatabaseMetadata {
         public String name;
         public int databaseId;
@@ -55,44 +53,38 @@ public class Database {
             tableMetadata.initTablespaceFile(transactionId);
         }
 
-    }
+        /**
+         * create database.
+         * ServerRuntime{@code (databaseNameLookup, databaseMetadata, metadataArray)} will be automatically updated. Corresponding changes are recorded in WAL log buffer.
+         * TODO: lock
+         *
+         * @param transactionId transactionId
+         * @param name          name of the database
+         * @return A Database Object
+         * @throws Exception WAL error
+         */
+        public static DatabaseMetadata createDatabase(long transactionId, String name) throws Exception {
+            // TODO: lock for databaseMetadata
+            if (ServerRuntime.databaseNameLookup.containsKey(name)) return null;
+            DatabaseMetadata metadata = new DatabaseMetadata();
+            metadata.name = name;
+            metadata.databaseId = ServerRuntime.newDatabase();
+            metadata.tables = new HashMap<>();
+            ServerRuntime.databaseMetadata.put(metadata.databaseId, metadata);
+            metadata.object = new JSONObject();
+            metadata.object.put("databaseName", name);
+            metadata.object.put("databaseId", metadata.databaseId);
+            metadata.object.put("tables", new JSONArray());
+            ServerRuntime.metadataArray.put(metadata.object);
+            ServerRuntime.databaseNameLookup.put(name, metadata.databaseId);
+            IO.writeCreateDatabase(transactionId, name,metadata.databaseId);
+            return metadata;
+        }
 
-    public DatabaseMetadata metadata;
-
-    public Database(DatabaseMetadata metadata) {
-        this.metadata = metadata;
     }
 
     private void persist() {
         // TODO
-    }
-
-    /**
-     * create database.
-     * ServerRuntime{@code (databaseNameLookup, databaseMetadata, metadataArray)} will be automatically updated. Corresponding changes are recorded in WAL log buffer.
-     * TODO: lock
-     *
-     * @param transactionId transactionId
-     * @param name          name of the database
-     * @return A Database Object
-     * @throws Exception WAL error
-     */
-    public static Database createDatabase(long transactionId, String name) throws Exception {
-        // TODO: lock for databaseMetadata
-        if (ServerRuntime.databaseNameLookup.containsKey(name)) return null;
-        Database database = new Database(new DatabaseMetadata());
-        database.metadata.name = name;
-        database.metadata.databaseId = ServerRuntime.newDatabase();
-        database.metadata.tables = new HashMap<>();
-        ServerRuntime.databaseMetadata.put(database.metadata.databaseId, database.metadata);
-        database.metadata.object = new JSONObject();
-        database.metadata.object.put("databaseName", name);
-        database.metadata.object.put("databaseId", database.metadata.databaseId);
-        database.metadata.object.put("tables", new JSONArray());
-        ServerRuntime.metadataArray.put(database.metadata.object);
-        ServerRuntime.databaseNameLookup.put(name, database.metadata.databaseId);
-        IO.writeCreateDatabase(transactionId, name, database.metadata.databaseId);
-        return database;
     }
 
 

@@ -20,6 +20,7 @@ public class Configuration {
      * after every single statement, a 'commit transaction' statement will be automatically supplemented.
      */
     public boolean auto_commit;
+    public final int maxCharsetLength = 4;
 
     public Configuration() {
         allow_implicit_transaction = true;
