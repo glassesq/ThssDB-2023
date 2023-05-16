@@ -53,7 +53,7 @@ public class Page {
      */
     int pageType;
     public static final int OVERALL_PAGE = 0;
-    public static final int EXTENT_MANAGE_AGE = 1;
+    public static final int EXTENT_MANAGE_PAGE = 1;
     public static final int INDEX_PAGE = 2;
     public static final int DATA_PAGE = 3;
 

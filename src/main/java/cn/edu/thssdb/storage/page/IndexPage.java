@@ -2,10 +2,13 @@ package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.runtime.ServerRuntime;
+import cn.edu.thssdb.schema.RecordLogical;
 import cn.edu.thssdb.schema.Table;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+
+import static cn.edu.thssdb.storage.page.IndexPage.RecordInPage.USER_DATA_RECORD;
 
 public class IndexPage extends Page {
 
@@ -23,13 +26,13 @@ public class IndexPage extends Page {
 
         /* ************** base point of the record ***************** */
         /* primary key */
-        byte[] primaryKeys;
+        public byte[] primaryKeys;
         public long updateTransactionId = 0;
         public long rollPointer = 0;
         public int childPageId = 0;
 
         /* non-primary key values. */
-        byte[] nonPrimaryKeys;
+        public byte[] nonPrimaryKeys;
         public static final byte SYSTEM_INFIMUM_RECORD = 0;
         public static final byte SYSTEM_SUPREME_RECORD = 1;
         public static final byte USER_DATA_RECORD = 2;
@@ -113,11 +116,9 @@ public class IndexPage extends Page {
                     this.updateTransactionId = page.parseLongBig(pos + primaryKeyLength);
                     this.rollPointer = page.parseSevenByteBig(pos + primaryKeyLength + 8);
                     this.nonPrimaryKeys = new byte[nonPrimaryKeyLength];
-                    System.arraycopy(page.bytes, pos + primaryKeyLength + 8 + 7,
-                            this.nonPrimaryKeys, 0, nonPrimaryKeyLength);
+                    System.arraycopy(page.bytes, pos + primaryKeyLength + 8 + 7, this.nonPrimaryKeys, 0, nonPrimaryKeyLength);
                     this.nullBitmap = new byte[nullBitmapLength];
-                    System.arraycopy(page.bytes, pos - 4 - nullBitmapLength,
-                            this.nullBitmap, 0, nullBitmapLength);
+                    System.arraycopy(page.bytes, pos - 4 - nullBitmapLength, this.nullBitmap, 0, nullBitmapLength);
 //                    parseRecursivelyDeeplyInPage(page, this.nextAbsoluteOffset, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
                     break;
             }
@@ -160,24 +161,19 @@ public class IndexPage extends Page {
                     newValue[nullBitmapLength + 4 + primaryKeyLength + 12] = (byte) (rollPointer >> 16);
                     newValue[nullBitmapLength + 4 + primaryKeyLength + 13] = (byte) (rollPointer >> 8);
                     newValue[nullBitmapLength + 4 + primaryKeyLength + 14] = (byte) rollPointer;
-                    System.arraycopy(nonPrimaryKeys, 0, newValue,
-                            nullBitmapLength + 4 + primaryKeyLength + 15, nonPrimaryKeyLength);
-                    IO.write(transactionId, page, pos - nullBitmapLength - 4,
-                            nullBitmapLength + 4 + primaryKeyLength + 15 + nonPrimaryKeyLength,
-                            newValue, false);
+                    System.arraycopy(nonPrimaryKeys, 0, newValue, nullBitmapLength + 4 + primaryKeyLength + 15, nonPrimaryKeyLength);
+                    IO.write(transactionId, page, pos - nullBitmapLength - 4, nullBitmapLength + 4 + primaryKeyLength + 15 + nonPrimaryKeyLength, newValue, false);
                     break;
                 case USER_POINTER_RECORD:
                     newValue[nullBitmapLength + 4 + primaryKeyLength] = (byte) (this.childPageId >> 24);
                     newValue[nullBitmapLength + 4 + primaryKeyLength + 1] = (byte) (this.childPageId >> 16);
                     newValue[nullBitmapLength + 4 + primaryKeyLength + 2] = (byte) (this.childPageId >> 8);
                     newValue[nullBitmapLength + 4 + primaryKeyLength + 3] = (byte) this.childPageId;
-                    IO.write(transactionId, page, pos - nullBitmapLength - 4,
-                            nullBitmapLength + 4 + primaryKeyLength + 4, newValue, false);
+                    IO.write(transactionId, page, pos - nullBitmapLength - 4, nullBitmapLength + 4 + primaryKeyLength + 4, newValue, false);
                     break;
                 case SYSTEM_SUPREME_RECORD:
                 case SYSTEM_INFIMUM_RECORD:
-                    IO.write(transactionId, page, pos - nullBitmapLength - 4,
-                            nullBitmapLength + 4 + 2, newValue, false);
+                    IO.write(transactionId, page, pos - nullBitmapLength - 4, nullBitmapLength + 4 + 2, newValue, false);
                     break;
                 default:
                     break;
@@ -186,14 +182,7 @@ public class IndexPage extends Page {
 
         @Override
         public String toString() {
-            StringBuilder result = new StringBuilder("RecordInPage " +
-                    "flags=" + flags +
-                    ", numberRecordOwnedInDirectory=" + numberRecordOwnedInDirectory +
-                    ", recordType=" + recordType +
-                    ", nextAbsoluteOffset=" + nextAbsoluteOffset +
-                    ", updateTransactionId=" + updateTransactionId +
-                    ", rollPointer=" + rollPointer +
-                    ", childPageId=" + childPageId);
+            StringBuilder result = new StringBuilder("RecordInPage " + "flags=" + flags + ", numberRecordOwnedInDirectory=" + numberRecordOwnedInDirectory + ", recordType=" + recordType + ", nextAbsoluteOffset=" + nextAbsoluteOffset + ", updateTransactionId=" + updateTransactionId + ", rollPointer=" + rollPointer + ", childPageId=" + childPageId);
             result.append("\nprimaryKeys=\n");
             for (byte b : this.primaryKeys) {
                 result.append(String.format("%02x ", b));
@@ -302,14 +291,14 @@ public class IndexPage extends Page {
     }
 
     /**
-     * Parse the user record part of this page using {@code page.bytes}.
+     * Parse the system + user record part of this page using {@code page.bytes}.
      * <b> The {@code parse()} method shall be called in advance for this method to work.</b>
      *
      * @param transactionId transaction that request this method
-     * @return records including infimumRecord and supremeRecord.
+     * @param metadata      tableMetadata
+     * @return records excluding infimumRecord and supremeRecord.
      */
-    public ArrayList<RecordInPage> parseAllRecordsInPage(long transactionId) {
-        Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
+    public ArrayList<RecordLogical> getAllRecordLogical(long transactionId, Table.TableMetadata metadata) {
         int primaryKeyLength = metadata.getPrimaryKeyLength();
         int nonPrimaryKeyLength = metadata.getNonPrimaryKeyLength();
         int nullBitmapLength = metadata.getNullBitmapLengthInByte();
@@ -318,18 +307,18 @@ public class IndexPage extends Page {
         infimumRecord = new RecordInPage();
 
         RecordInPage record = infimumRecord;
-        ArrayList<RecordInPage> recordList = new ArrayList<>();
+        ArrayList<RecordLogical> recordList = new ArrayList<>();
         while (true) {
-            System.out.println("currentPos:"+ currentPos);
             record.parseDeeplyInPage(this, currentPos, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
             System.out.println(record);
-            recordList.add(record);
+            if (record.recordType == USER_DATA_RECORD) {
+                recordList.add(new RecordLogical(record, metadata));
+            }
             if (currentPos == 52 + 10) {
                 supremeRecord = record;
                 break;
             }
             currentPos = record.nextAbsoluteOffset;
-            System.out.println("offset: " + record.nextAbsoluteOffset);
             record = new RecordInPage();
         }
         return recordList;
@@ -339,10 +328,8 @@ public class IndexPage extends Page {
      * set up an empty index Page.
      */
     public void setup() {
-        infimumRecord = RecordInPage.createRecordInPageEntry(RecordInPage.SYSTEM_INFIMUM_RECORD,
-                0, 0, 0, 52 + 10);
-        supremeRecord = RecordInPage.createRecordInPageEntry(RecordInPage.SYSTEM_SUPREME_RECORD,
-                0, 0, 0, 0);
+        infimumRecord = RecordInPage.createRecordInPageEntry(RecordInPage.SYSTEM_INFIMUM_RECORD, 0, 0, 0, 52 + 10);
+        supremeRecord = RecordInPage.createRecordInPageEntry(RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, 0);
     }
 
 }

@@ -1,13 +1,12 @@
 package cn.edu.thssdb.storage;
 
 import cn.edu.thssdb.runtime.ServerRuntime;
-import cn.edu.thssdb.storage.page.Page;
+import cn.edu.thssdb.storage.page.*;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
 import java.io.RandomAccessFile;
 import java.util.HashMap;
-import java.util.Map;
+
+import static cn.edu.thssdb.storage.page.Page.*;
 
 public class DiskBuffer {
 
@@ -65,8 +64,29 @@ public class DiskBuffer {
         if (bytes != ServerRuntime.config.pageSize) {
             throw new Exception("read page error. Wrong length" + bytes);
         }
-        Page page = new Page();
+
+        int pageType = ((int) pageBytes[12] << 8) | pageBytes[13];
+        System.out.println("pageType" + pageType);
+        Page page;
+        switch (pageType) {
+            case OVERALL_PAGE:
+                page = new OverallPage();
+                break;
+            case INDEX_PAGE:
+                page = new IndexPage();
+                System.out.println("here is a index page");
+                break;
+            case EXTENT_MANAGE_PAGE:
+                page = new ExtentManagePage();
+                break;
+            case DATA_PAGE:
+                page = new DataPage();
+            default:
+                System.out.println("here is a default page");
+                page = new Page();
+        }
         page.bytes = pageBytes;
+        page.parse();
         buffer.put(concat(spaceId, pageId), page);
         tablespaceFile.close();
     }

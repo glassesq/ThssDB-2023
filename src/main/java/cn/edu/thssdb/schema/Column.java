@@ -10,15 +10,17 @@ public class Column {
     public String name;
     public DataType type;
     // TODO: multiple primary keys
-    public int primary = 0;
+    public int primary = -1;
     public boolean notNull = false;
-    public int length;
+    private int length;
+
+    public boolean offPage = false;
+    // TODO: stored off page.
 
     JSONObject object;
 
     public String toString() {
-        return "columnName: " + name + " type: " + type + " primaryKey: " + primary
-                + " notNull: " + notNull + " length: " + length + " \n";
+        return "columnName: " + name + " type: " + type + " primaryKey: " + primary + " notNull: " + notNull + " length: " + length + " \n";
     }
 
     public Column() {
@@ -50,8 +52,7 @@ public class Column {
         column.name = object.getString("columnName");
         column.type = str2DataType(object.getString("type"));
         if (column.type == DataType.STRING) column.length = object.getInt("length");
-        if (object.has("primaryKey") && object.getInt("primaryKey") >= 0)
-            column.primary = object.getInt("primaryKey");
+        if (object.has("primaryKey") && object.getInt("primaryKey") >= 0) column.primary = object.getInt("primaryKey");
         if (object.has("notNull") && object.getBoolean("notNull")) column.notNull = true;
         return column;
     }

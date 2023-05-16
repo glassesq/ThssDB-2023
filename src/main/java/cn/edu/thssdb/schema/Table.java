@@ -38,26 +38,17 @@ public class Table {
          * if the table is inited (The relevant tablespace file is already in disk buffer or disk.)
          */
         public boolean inited = false;
-        public ArrayList<String> columns = new ArrayList<>();
-        public HashMap<String, Column> columnDetails = new HashMap<>();
+        public HashMap<String, Integer> columns = new HashMap<>();
+        public ArrayList<Column> columnDetails = new ArrayList<>();
 
         public JSONObject object;
         public JSONArray columnObjectArray;
 
-        public String columnInfo() {
-            StringBuilder buffer = new StringBuilder();
-            for (String column : columns) {
-                buffer.append(column);
-                buffer.append(',');
-            }
-            return buffer.toString();
-        }
-
         public int getPrimaryKeyLength() {
             int count = 0;
-            for (String column : columns) {
-                if (columnDetails.get(column).primary >= 0) {
-                    count += columnDetails.get(column).getLength();
+            for (Column columnDetail : columnDetails) {
+                if (columnDetail.primary >= 0) {
+                    count += columnDetail.getLength();
                 }
             }
             return count;
@@ -65,9 +56,9 @@ public class Table {
 
         public int getNonPrimaryKeyLength() {
             int count = 0;
-            for (String column : columns) {
-                if (columnDetails.get(column).primary < 0) {
-                    count += columnDetails.get(column).getLength();
+            for (Column columnDetail : columnDetails) {
+                if (columnDetail.primary < 0) {
+                    count += columnDetail.getLength();
                 }
             }
             return count;
@@ -80,13 +71,37 @@ public class Table {
          */
         public int getNullBitmapLengthInByte() {
             int count = 0;
-            for (String column : columns) {
-                if (!columnDetails.get(column).notNull) {
+            for (Column columnDetail : columnDetails) {
+                if (!columnDetail.notNull) {
                     count++;
                 }
             }
+
             /* ceil */
             return ((count + 7) / 8);
+        }
+
+        /**
+         * get offset of each primaryKey
+         * TODO: optimization
+         *
+         * @return ArrayList<Integer> the offset of {@code ith} primaryKey
+         */
+        public ArrayList<Integer> getPrimaryOffsetInOrder() {
+            HashMap<Integer, Column> primaryKeyColumn = new HashMap<>();
+            ArrayList<Integer> offsetList = new ArrayList<>();
+            for (Column column : columnDetails) {
+                if (column.primary >= 0) {
+                    primaryKeyColumn.put(column.primary, column);
+                }
+            }
+            int pOffset = 0;
+            for (int i = 0; i < primaryKeyColumn.size(); i++) {
+                Column column = primaryKeyColumn.get(i);
+                offsetList.add(pOffset);
+                pOffset += column.getLength();
+            }
+            return offsetList;
         }
 
         /**
@@ -121,8 +136,8 @@ public class Table {
             metadata.columnObjectArray = object.getJSONArray("columns");
             for (int i = 0; i < metadata.columnObjectArray.length(); i++) {
                 Column column = Column.parse(metadata.columnObjectArray.getJSONObject(i));
-                metadata.columnDetails.put(column.name, column);
-                metadata.columns.add(column.name);
+                metadata.columns.put(column.name, i);
+                metadata.columnDetails.add(column);
             }
 
             /* since the tableMetadata is formed according to an existed json object, it must be on disk. */
@@ -157,8 +172,9 @@ public class Table {
         }
 
         public void addColumn(Column column) {
-            this.columns.add(column.name);
-            this.columnDetails.put(column.name, column);
+            int size = columnDetails.size();
+            this.columns.put(column.name, size);
+            this.columnDetails.add(column);
             columnObjectArray.put(column.object);
         }
     }

@@ -44,6 +44,7 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
     /**
      * visit create-table statement and prepare a metadata for it.
      * This metadata is not managed by ServerRuntime by now.
+     *
      * @param ctx the parse tree
      * @return plan of create-table statement
      */
@@ -71,7 +72,7 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
 
         int order = 0;
         for (SQLParser.ColumnNameContext columnNameContext : ctx.tableConstraint().columnName()) {
-            tableMetadata.columnDetails.get(columnNameContext.getText()).setPrimaryKey(order);
+            tableMetadata.columnDetails.get(tableMetadata.columns.get(columnNameContext.getText())).setPrimaryKey(order);
             ++order;
         }
 

@@ -1,5 +1,6 @@
 package cn.edu.thssdb.schema;
 
+import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.type.DataType;
 
 import java.nio.charset.StandardCharsets;
@@ -26,8 +27,8 @@ public class RecordLogical {
          * @param type    data type
          * @param offPage if the value is stored offPage;
          */
-        public ValueWrapper(byte[] bytes, DataType type, boolean offPage) {
-            this.bytes = Arrays.copyOf(bytes, bytes.length);
+        public ValueWrapper(byte[] bytes, DataType type, int length, boolean offPage) {
+            this.bytes = Arrays.copyOf(bytes, length);
             this.type = type;
             this.offPage = offPage;
         }
@@ -72,7 +73,6 @@ public class RecordLogical {
                     bytes[2] = (byte) (floatValue >> 8);
                     bytes[3] = (byte) floatValue;
                     break;
-
                 case LONG:
                     long longValue = Long.parseLong(string);
                     bytes[0] = (byte) (longValue >> 56);
@@ -121,10 +121,7 @@ public class RecordLogical {
 
         // TODO: test for unsigned and signed stuff
         public long parseLongBig() {
-            return Integer.toUnsignedLong(((bytes[0] & 0xFF) << 24) |
-                    ((bytes[1] & 0xFF) << 16) | ((bytes[2] & 0xFF) << 8) | (bytes[3] & 0xFF)) << 32
-                    | ((Integer.toUnsignedLong(bytes[4] & 0xFF) << 24) | ((bytes[5] & 0xFF) << 16)
-                    | ((bytes[6] & 0xFF) << 8) | (bytes[7] & 0xFF));
+            return Integer.toUnsignedLong(((bytes[0] & 0xFF) << 24) | ((bytes[1] & 0xFF) << 16) | ((bytes[2] & 0xFF) << 8) | (bytes[3] & 0xFF)) << 32 | ((Integer.toUnsignedLong(bytes[4] & 0xFF) << 24) | ((bytes[5] & 0xFF) << 16) | ((bytes[6] & 0xFF) << 8) | (bytes[7] & 0xFF));
         }
 
         @Override
@@ -146,4 +143,32 @@ public class RecordLogical {
     }
 
     public ArrayList<ValueWrapper> values = new ArrayList<>();
+
+    public RecordLogical(IndexPage.RecordInPage record, Table.TableMetadata metadata) {
+        ArrayList<Integer> primaryOffsetList = metadata.getPrimaryOffsetInOrder();
+        int nonPrimaryOffset = 0;
+        for (int i = 0; i < metadata.columnDetails.size(); i++) {
+            Column column = metadata.columnDetails.get(i);
+            byte[] newValue = new byte[column.getLength()];
+            if (column.primary >= 0) {
+                System.arraycopy(record.primaryKeys, primaryOffsetList.get(column.primary), newValue, 0, column.getLength());
+                values.add(new ValueWrapper(newValue, column.type, column.getLength(), column.offPage));
+            } else {
+                System.arraycopy(record.nonPrimaryKeys, nonPrimaryOffset, newValue, 0, column.getLength());
+                values.add(new ValueWrapper(newValue, column.type, column.getLength(), column.offPage));
+                nonPrimaryOffset += column.getLength();
+            }
+        }
+    }
+
+    @Override
+    public String toString() {
+        StringBuilder result = new StringBuilder();
+        for (ValueWrapper value : values) {
+            result.append(value);
+            result.append("\n");
+            System.out.println(value.toRawString());
+        }
+        return result.toString();
+    }
 }
