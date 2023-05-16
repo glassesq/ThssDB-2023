@@ -56,6 +56,8 @@ public class WriteLog {
             // TODO: we may use compressed format for WAL latter, currently we use plain-text.
             // TODO: this is only for test.
             switch (type) {
+                case CHECKPOINT_LOG:
+                    return "CHECKPOINT dirty pages are all written to disk.";
                 case COMMIT_LOG:
                     return "TRANSACTION COMMIT RECORD: transactionId: " + transactionId;
                 case START_LOG:
@@ -97,6 +99,8 @@ public class WriteLog {
     public static final int CREATE_DATABASE_LOG = 4;
     public static final int DELETE_DATABASE_LOG = 5;
     public static final int CREATE_TABLE_LOG = 6;
+
+    public static final int CHECKPOINT_LOG = 1000;
 
 
     /**

@@ -11,6 +11,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 
 import static cn.edu.thssdb.runtime.ServerRuntime.config;
+import static cn.edu.thssdb.storage.writeahead.WriteLog.CHECKPOINT_LOG;
 
 public class IO {
     /**
@@ -124,11 +125,20 @@ public class IO {
         metadataStream.close();
     }
 
+    /**
+     * transaction requests a commit
+     * TODO: this implementation is only for test. The current implementation is unsafe, incorrect and has poor performance.
+     *
+     * @param transactionId transaction
+     * @throws Exception WAL Error
+     */
     public static void pushTransactionCommit(long transactionId) throws Exception {
         // TODO: latch
         WriteLog.addSpecialLog(transactionId, WriteLog.COMMIT_LOG);
         pushWALAndPages();
         pushMetadataUpdate();
+        WriteLog.WriteLogEntry entry = new WriteLog.WriteLogEntry(-1, CHECKPOINT_LOG);
+        entry.writeToDisk();
         // TODO: release latch
     }
 
