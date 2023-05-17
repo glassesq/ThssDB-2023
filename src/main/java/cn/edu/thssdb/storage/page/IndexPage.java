@@ -2,13 +2,15 @@ package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.runtime.ServerRuntime;
+import cn.edu.thssdb.schema.Column;
 import cn.edu.thssdb.schema.RecordLogical;
 import cn.edu.thssdb.schema.Table;
+import cn.edu.thssdb.schema.ValueWrapper;
+import cn.edu.thssdb.utils.Pair;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-
-import static cn.edu.thssdb.storage.page.IndexPage.RecordInPage.USER_DATA_RECORD;
+import java.util.Arrays;
 
 public class IndexPage extends Page {
 
@@ -17,22 +19,40 @@ public class IndexPage extends Page {
      * the actual values of primary/non-primary fields shall be accessed other way.
      */
     public static class RecordInPage {
+        public int myOffset;
+
         /* public ArrayList<int> variableFieldLength; */
         public byte[] nullBitmap;
         public byte flags;
         public byte numberRecordOwnedInDirectory;
         public byte recordType;
         public int nextAbsoluteOffset;
+        public RecordInPage nextRecordInPage = null;
+        /**
+         * this field is only for creation use.
+         * You should never use this field to iterate user records.
+         */
+        public RecordInPage previousRecordInPage = null;
 
         /* ************** base point of the record ***************** */
         /* primary key */
         public byte[] primaryKeys;
+
+        /**
+         * this field stores parsed value of primaryKey, ready for comparison
+         */
+        ValueWrapper[] primaryKeyValues = null;
         public long updateTransactionId = 0;
         public long rollPointer = 0;
         public int childPageId = 0;
 
         /* non-primary key values. */
         public byte[] nonPrimaryKeys;
+
+        /**
+         * this field stores parsed value of nonPrimaryKey, ready for comparison
+         */
+        ValueWrapper[] nonPrimaryKeyValues = null;
         public static final byte SYSTEM_INFIMUM_RECORD = 0;
         public static final byte SYSTEM_SUPREME_RECORD = 1;
         public static final byte USER_DATA_RECORD = 2;
@@ -82,44 +102,87 @@ public class IndexPage extends Page {
          * @param nonPrimaryKeyLength nonPrimaryKeyLength
          * @param nullBitmapLength    nullBitmapLength (in byte)
          */
-        public void parseDeeplyInPage(Page page, int pos, int primaryKeyLength, int nonPrimaryKeyLength, int nullBitmapLength) {
+        public void parseDeeplyInPage(Page page, int pos, int primaryKeyLength, int nonPrimaryKeyLength, int nullBitmapLength, Table.TableMetadata metadata) {
+            this.myOffset = pos;
             /* variable length */
             this.flags = (byte) (page.bytes[pos - 4] & 0xF0);
             this.numberRecordOwnedInDirectory = (byte) (page.bytes[pos - 4] & 0x0F);
             this.recordType = page.bytes[pos - 3];
             this.nextAbsoluteOffset = page.parseShortBig(pos - 2);
+            ArrayList<Integer> primaryOffsetList;
             /* base point */
             switch (this.recordType) {
                 case (SYSTEM_SUPREME_RECORD):
-                    this.primaryKeys = "ax".getBytes(StandardCharsets.US_ASCII);
-                    this.nonPrimaryKeys = new byte[0];
                     this.nullBitmap = new byte[0];
-                    /* end of the parsing */
+
+                    this.primaryKeys = "ax".getBytes(StandardCharsets.US_ASCII);
+                    this.primaryKeyValues = null;
+
+                    this.nonPrimaryKeys = new byte[0];
+                    this.nonPrimaryKeyValues = null;
                     return;
                 case (SYSTEM_INFIMUM_RECORD):
-                    this.primaryKeys = "in".getBytes(StandardCharsets.US_ASCII);
-                    this.nonPrimaryKeys = new byte[0];
                     this.nullBitmap = new byte[0];
-//                    parseRecursivelyDeeplyInPage(page, this.nextAbsoluteOffset, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
+
+                    this.primaryKeys = "in".getBytes(StandardCharsets.US_ASCII);
+                    this.primaryKeyValues = null;
+
+                    this.nonPrimaryKeys = new byte[0];
+                    this.nonPrimaryKeyValues = null;
                     break;
                 case (USER_POINTER_RECORD):
+                    this.nullBitmap = new byte[0];
+
                     this.primaryKeys = new byte[primaryKeyLength];
                     System.arraycopy(page.bytes, pos, this.primaryKeys, 0, primaryKeyLength);
+                    this.primaryKeyValues = new ValueWrapper[metadata.getPrimaryKeyNumber()];
+
                     this.nonPrimaryKeys = new byte[0];
+                    this.nonPrimaryKeyValues = null;
+
+                    primaryOffsetList = metadata.getPrimaryOffsetInOrder();
+                    for (int i = 0; i < metadata.columnDetails.size(); i++) {
+                        Column column = metadata.columnDetails.get(i);
+                        byte[] newValue = new byte[column.getLength()];
+                        if (column.primary >= 0) {
+                            System.arraycopy(primaryKeys, primaryOffsetList.get(column.primary), newValue, 0, column.getLength());
+                            primaryKeyValues[column.primary] = (new ValueWrapper(newValue, column.type, column.getLength(), column.offPage));
+                        }
+                    }
+
                     this.childPageId = page.parseIntegerBig(pos + primaryKeyLength);
-                    this.nullBitmap = new byte[0];
-//                    parseRecursivelyDeeplyInPage(page, this.nextAbsoluteOffset, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
                     break;
                 case (USER_DATA_RECORD):
-                    this.primaryKeys = new byte[primaryKeyLength];
-                    System.arraycopy(page.bytes, pos, this.primaryKeys, 0, primaryKeyLength);
-                    this.updateTransactionId = page.parseLongBig(pos + primaryKeyLength);
-                    this.rollPointer = page.parseSevenByteBig(pos + primaryKeyLength + 8);
-                    this.nonPrimaryKeys = new byte[nonPrimaryKeyLength];
-                    System.arraycopy(page.bytes, pos + primaryKeyLength + 8 + 7, this.nonPrimaryKeys, 0, nonPrimaryKeyLength);
                     this.nullBitmap = new byte[nullBitmapLength];
                     System.arraycopy(page.bytes, pos - 4 - nullBitmapLength, this.nullBitmap, 0, nullBitmapLength);
-//                    parseRecursivelyDeeplyInPage(page, this.nextAbsoluteOffset, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
+
+                    this.primaryKeys = new byte[primaryKeyLength];
+                    System.arraycopy(page.bytes, pos, this.primaryKeys, 0, primaryKeyLength);
+                    this.primaryKeyValues = new ValueWrapper[metadata.getPrimaryKeyNumber()];
+
+                    this.updateTransactionId = page.parseLongBig(pos + primaryKeyLength);
+                    this.rollPointer = page.parseSevenByteBig(pos + primaryKeyLength + 8);
+
+                    this.nonPrimaryKeys = new byte[nonPrimaryKeyLength];
+                    System.arraycopy(page.bytes, pos + primaryKeyLength + 8 + 7, this.nonPrimaryKeys, 0, nonPrimaryKeyLength);
+                    this.nonPrimaryKeyValues = new ValueWrapper[metadata.getNonPrimaryKeyNumber()];
+
+                    primaryOffsetList = metadata.getPrimaryOffsetInOrder();
+                    int nonPrimaryOffset = 0;
+                    int npIndex = 0;
+                    for (int i = 0; i < metadata.columnDetails.size(); i++) {
+                        Column column = metadata.columnDetails.get(i);
+                        byte[] newValue = new byte[column.getLength()];
+                        if (column.primary >= 0) {
+                            System.arraycopy(primaryKeys, primaryOffsetList.get(column.primary), newValue, 0, column.getLength());
+                            primaryKeyValues[column.primary] = (new ValueWrapper(newValue, column.type, column.getLength(), column.offPage));
+                        } else {
+                            System.arraycopy(nonPrimaryKeys, nonPrimaryOffset, newValue, 0, column.getLength());
+                            nonPrimaryKeyValues[npIndex] = (new ValueWrapper(newValue, column.type, column.getLength(), column.offPage));
+                            ++npIndex;
+                            nonPrimaryOffset += column.getLength();
+                        }
+                    }
                     break;
             }
         }
@@ -230,6 +293,7 @@ public class IndexPage extends Page {
         indexPage.pageId = pageId;
         if (!temporary) {
             IO.traceNewPage(indexPage);
+            indexPage.pageType = INDEX_PAGE;
             indexPage.setup();
             indexPage.writeFILHeader(transactionId);
             indexPage.writeIndexHeader(transactionId);
@@ -288,17 +352,37 @@ public class IndexPage extends Page {
         parseFILHeader();
         // TODO: repeatedly parsing FIL Header. (performance consideration).
         parseIndexHeader();
+        parseAllRecords();
     }
 
     /**
      * Parse the system + user record part of this page using {@code page.bytes}.
-     * <b> The {@code parse()} method shall be called in advance for this method to work.</b>
+     * {@code this.spaceId} shall be parsed first.
+     * <b> {@code this.spaceId} and its tableMetadata must be traceable in ServerRuntime. </b>
      *
      * @param transactionId transaction that request this method
-     * @param metadata      tableMetadata
      * @return records excluding infimumRecord and supremeRecord.
      */
-    public ArrayList<RecordLogical> getAllRecordLogical(long transactionId, Table.TableMetadata metadata) {
+    public ArrayList<RecordLogical> getAllRecordLogical(long transactionId) {
+        Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
+        ArrayList<RecordLogical> recordList = new ArrayList<>();
+        RecordInPage record = infimumRecord;
+        while (record != supremeRecord) {
+            recordList.add(new RecordLogical(record, metadata));
+            record = record.nextRecordInPage;
+        }
+        return recordList;
+    }
+
+    /**
+     * Parse the system + user record part of this page using {@code page.bytes}.
+     * Save them into this.records;
+     * <b> {@code this.spaceId} and its tableMetadata must be traceable in ServerRuntime.</b>
+     * The method shall be only called once when inputing this page from disk.
+     */
+    private void parseAllRecords() {
+        Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
+        System.out.println(this.spaceId);
         int primaryKeyLength = metadata.getPrimaryKeyLength();
         int nonPrimaryKeyLength = metadata.getNonPrimaryKeyLength();
         int nullBitmapLength = metadata.getNullBitmapLengthInByte();
@@ -307,21 +391,116 @@ public class IndexPage extends Page {
         infimumRecord = new RecordInPage();
 
         RecordInPage record = infimumRecord;
-        ArrayList<RecordLogical> recordList = new ArrayList<>();
         while (true) {
-            record.parseDeeplyInPage(this, currentPos, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength);
+            record.parseDeeplyInPage(this, currentPos, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength, metadata);
             System.out.println(record);
-            if (record.recordType == USER_DATA_RECORD) {
-                recordList.add(new RecordLogical(record, metadata));
-            }
             if (currentPos == 52 + 10) {
                 supremeRecord = record;
                 break;
             }
             currentPos = record.nextAbsoluteOffset;
-            record = new RecordInPage();
+            record.nextRecordInPage = new RecordInPage();
+            record.nextRecordInPage.previousRecordInPage = record;
+            record = record.nextRecordInPage;
+
         }
-        return recordList;
+    }
+
+    /**
+     * insert {@code recordToBeInserted} into page just before the {@code recordToBeInserted} assuming there is enough space for it.
+     * This method implements {@code A <- node.insert(A, w, v)} in the paper, where A is {@code this} and (w,v) is {@code recordLogical}.
+     * <br/> <br/>
+     * This method writes <b> ATOMICALLY </b>.
+     * Read operations can be performed without locks. This is because operations on iterative structures ({@code nextRecordInPage})are atomic.
+     *
+     * @param transactionId      transaction
+     * @param recordToBeInserted record to be inserted
+     * @param nextRecord         record that is just after the record to be inserted
+     */
+    public void insertDataRecordInternal(long transactionId, RecordLogical recordToBeInserted, RecordInPage nextRecord) {
+        // TODO: Lock on this page shall be added.
+
+        Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
+        int primaryKeyLength = metadata.getPrimaryKeyLength();
+        int nonPrimaryKeyLength = metadata.getNonPrimaryKeyLength();
+        int nullBitmapLength = metadata.getNullBitmapLengthInByte();
+        RecordInPage record = RecordInPage.createRecordInPageEntry(RecordInPage.USER_DATA_RECORD, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength, nextRecord.myOffset);
+        System.out.println(nextRecord.myOffset);
+        record.nextRecordInPage = nextRecord;
+
+        record.previousRecordInPage = nextRecord.previousRecordInPage;
+
+        record.primaryKeyValues = new ValueWrapper[metadata.getPrimaryKeyNumber()];
+        record.nonPrimaryKeyValues = new ValueWrapper[metadata.getNonPrimaryKeyNumber()];
+
+        int nonPrimaryOffset = 0;
+        ArrayList<Integer> primaryOffsetList = metadata.getPrimaryOffsetInOrder();
+
+        int npIndex = 0;
+        for (int i = 0; i < metadata.columnDetails.size(); i++) {
+            Column column = metadata.columnDetails.get(i);
+            if (column.primary >= 0) {
+                record.primaryKeyValues[column.primary] = new ValueWrapper(recordToBeInserted.primaryKeyValues[column.primary]);
+                System.arraycopy(recordToBeInserted.primaryKeyValues[column.primary].bytes, 0, record.primaryKeys, primaryOffsetList.get(column.primary), column.getLength());
+            } else {
+                record.nonPrimaryKeyValues[npIndex] = new ValueWrapper(recordToBeInserted.nonPrimaryKeyValues[npIndex]);
+                System.arraycopy(recordToBeInserted.primaryKeyValues[npIndex].bytes, 0, record.nonPrimaryKeys, nonPrimaryOffset, column.getLength());
+                nonPrimaryOffset += column.getLength();
+                ++npIndex;
+            }
+        }
+
+        record.updateTransactionId = transactionId;
+
+        // previousRecordInPage is not used in reading.
+        nextRecord.previousRecordInPage = record;
+
+        record.myOffset = this.freespaceStart + 4 + nullBitmapLength;
+        record.previousRecordInPage.nextAbsoluteOffset = record.myOffset;
+
+        /* BEGIN ATOMIC */
+        /* reference assignment is atomic.*/
+        record.previousRecordInPage.nextRecordInPage = record;
+        /* END ATOMIC */
+
+        // TODO:
+        this.freespaceStart = record.myOffset + primaryKeyLength + nonPrimaryKeyLength + 15;
+        writeIndexHeader(transactionId);
+        record.write(transactionId, this, record.myOffset);
+        record.nextRecordInPage.write(transactionId, this, record.nextRecordInPage.myOffset);
+        record.previousRecordInPage.write(transactionId, this, record.previousRecordInPage.myOffset);
+
+        System.out.println("############################## The record below is inserted:");
+        System.out.println(record);
+        System.out.println("##############################");
+
+        // TODO: releaseLock
+    }
+
+    /**
+     * scan for primaryKey == searchKey internal the page.
+     *
+     * @param transactionId transactionKey
+     * @param searchKey     value of primary key
+     * @return a pair of boolean and recordInPage.
+     * The boolean indicates whether the searchKey is found. If it is found, the recordInPage is the record that contains the searchKey.
+     * Otherwise, it stores the first record that is larger than the searchKey.
+     */
+    public Pair<Boolean, RecordInPage> scanInternal(long transactionId, ValueWrapper[] searchKey) {
+        RecordInPage record = infimumRecord.nextRecordInPage;
+        while (record != supremeRecord) {
+            System.out.println(Arrays.toString(searchKey[0].bytes));
+            System.out.println(Arrays.toString(record.primaryKeyValues[0].bytes));
+            int compareResult = ValueWrapper.compareArray(record.primaryKeyValues, searchKey);
+            if (compareResult == 0) {
+                System.out.println(Arrays.toString(record.primaryKeyValues));
+                return new Pair<>(true, record);
+            } else if (compareResult < 0) {
+                return new Pair<>(false, record);
+            }
+            record = record.nextRecordInPage;
+        }
+        return new Pair<>(false, record);
     }
 
     /**

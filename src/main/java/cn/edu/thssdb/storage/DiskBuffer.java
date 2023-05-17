@@ -70,23 +70,30 @@ public class DiskBuffer {
         Page page;
         switch (pageType) {
             case OVERALL_PAGE:
-                page = new OverallPage();
+                OverallPage overallPage = new OverallPage();
+                overallPage.bytes = pageBytes;
+                overallPage.parse();
+                page = overallPage;
                 break;
             case INDEX_PAGE:
-                page = new IndexPage();
+                IndexPage indexPage = new IndexPage();
+                indexPage.bytes = pageBytes;
+                indexPage.parse();
+                page = indexPage;
                 System.out.println("here is a index page");
                 break;
             case EXTENT_MANAGE_PAGE:
                 page = new ExtentManagePage();
+                page.bytes = pageBytes;
                 break;
             case DATA_PAGE:
                 page = new DataPage();
+                page.bytes = pageBytes;
             default:
-                System.out.println("here is a default page");
                 page = new Page();
+                page.bytes = pageBytes;
+                System.out.println("here is a default page");
         }
-        page.bytes = pageBytes;
-        page.parse();
         buffer.put(concat(spaceId, pageId), page);
         tablespaceFile.close();
     }

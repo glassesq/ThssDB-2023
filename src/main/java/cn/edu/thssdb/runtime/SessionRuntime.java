@@ -4,10 +4,14 @@ import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.plan.LogicalPlan;
 import cn.edu.thssdb.plan.impl.CreateDatabasePlan;
 import cn.edu.thssdb.plan.impl.CreateTablePlan;
+import cn.edu.thssdb.plan.impl.InsertPlan;
 import cn.edu.thssdb.plan.impl.UseDatabasePlan;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import cn.edu.thssdb.schema.Database;
+import cn.edu.thssdb.schema.Table;
 import cn.edu.thssdb.utils.StatusUtil;
+
+import java.util.ArrayList;
 
 public class SessionRuntime {
     /* The runtime of one session. */
@@ -70,6 +74,7 @@ public class SessionRuntime {
                     transactionId = -1;
                     // Commit statement shall be treated as the end of transaction. No matter it succeeds or not.
                     // TODO: If commit failed, the transaction shall enter its abort process.
+                    // see also at the end of the function
                     return new ExecuteStatementResp(StatusUtil.success("The transaction has been successfully committed."), false);
                 case CREATE_DATABASE:
                     CreateDatabasePlan createDatabasePlan = (CreateDatabasePlan) plan;
@@ -100,8 +105,23 @@ public class SessionRuntime {
                 case CREATE_TABLE:
                     CreateTablePlan createTablePlan = (CreateTablePlan) plan;
                     String name = createTablePlan.tableMetadata.name;
+                    if (currentDatabaseMetadata.getTableByName(name) != null)
+                        return new ExecuteStatementResp(StatusUtil.fail("Table " + name + " existed."), false);
                     currentDatabaseMetadata.createTable(transactionId, createTablePlan.tableMetadata);
                     response = new ExecuteStatementResp(StatusUtil.success("Table " + name + " created."), false);
+                    break;
+                case INSERT:
+                    InsertPlan insertPlan = (InsertPlan) plan;
+                    if (insertPlan.broken)
+                        return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+                    Table.TableMetadata table = currentDatabaseMetadata.getTableByName(insertPlan.tableName);
+                    if (table == null)
+                        return new ExecuteStatementResp(StatusUtil.fail("Table " + insertPlan.tableName + " not found."), false);
+                    ArrayList<ArrayList<String>> results = insertPlan.getValues(table);
+                    for (ArrayList<String> result : results) {
+                        table.insertRecord(transactionId, result);
+                    }
+                    response = new ExecuteStatementResp(StatusUtil.success("Insertion succeeded."), false);
                     break;
                 default:
             }
@@ -109,6 +129,9 @@ public class SessionRuntime {
             if (response != null) {
                 if (ServerRuntime.config.auto_commit) {
                     IO.pushTransactionCommit(transactionId);
+                    // This commit is only for test.
+                    // TODO: Suitable validation should be introduced.
+                    // If only NOT NULL as well as PRIMARY KEY constraints are implemented, we can sacrifice functionality for performance.
                     transactionId = -1;
                     response.status.msg = response.status.msg + "\n\nEnd of the transaction.(auto commit on).";
                 }

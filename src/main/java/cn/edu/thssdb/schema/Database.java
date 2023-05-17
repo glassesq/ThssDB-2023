@@ -51,6 +51,7 @@ public class Database {
             object.getJSONArray("tables").put(tableMetadata.object);
             IO.writeCreateTable(transactionId, this.databaseId, tableMetadata);
             tableMetadata.initTablespaceFile(transactionId);
+            ServerRuntime.tableMetadata.put(tableMetadata.spaceId, tableMetadata);
         }
 
         /**
@@ -77,8 +78,18 @@ public class Database {
             metadata.object.put("tables", new JSONArray());
             ServerRuntime.metadataArray.put(metadata.object);
             ServerRuntime.databaseNameLookup.put(name, metadata.databaseId);
-            IO.writeCreateDatabase(transactionId, name,metadata.databaseId);
+            IO.writeCreateDatabase(transactionId, name, metadata.databaseId);
             return metadata;
+        }
+
+        public Table.TableMetadata getTableByName(String name) {
+            // optimization
+            for (Integer i : tables.keySet()) {
+                if (name.equals(tables.get(i).name)) {
+                    return tables.get(i);
+                }
+            }
+            return null;
         }
 
     }

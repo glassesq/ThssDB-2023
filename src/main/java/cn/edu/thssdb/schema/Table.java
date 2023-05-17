@@ -1,8 +1,10 @@
 package cn.edu.thssdb.schema;
 
+import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.storage.page.OverallPage;
+import cn.edu.thssdb.utils.Pair;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -44,7 +46,30 @@ public class Table {
         public JSONObject object;
         public JSONArray columnObjectArray;
 
+        public int getPrimaryKeyNumber() {
+            // TODO: optimization
+            int count = 0;
+            for (Column columnDetail : columnDetails) {
+                if (columnDetail.primary >= 0) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
+        public int getNonPrimaryKeyNumber() {
+            // TODO: optimization
+            int count = 0;
+            for (Column columnDetail : columnDetails) {
+                if (columnDetail.primary < 0) {
+                    count++;
+                }
+            }
+            return count;
+        }
+
         public int getPrimaryKeyLength() {
+            // TODO: optimization
             int count = 0;
             for (Column columnDetail : columnDetails) {
                 if (columnDetail.primary >= 0) {
@@ -55,6 +80,7 @@ public class Table {
         }
 
         public int getNonPrimaryKeyLength() {
+            // TODO: optimization
             int count = 0;
             for (Column columnDetail : columnDetails) {
                 if (columnDetail.primary < 0) {
@@ -70,6 +96,7 @@ public class Table {
          * @return number of bytes
          */
         public int getNullBitmapLengthInByte() {
+            // TODO: optimization
             int count = 0;
             for (Column columnDetail : columnDetails) {
                 if (!columnDetail.notNull) {
@@ -177,6 +204,44 @@ public class Table {
             this.columnDetails.add(column);
             columnObjectArray.put(column.object);
         }
+
+        /**
+         * insert values into this table
+         *
+         * @param transactionId transaction
+         * @param values        value (in the format of ('string', 1234, null))
+         * @throws Exception the primary key is existed.
+         */
+        public void insertRecord(long transactionId, ArrayList<String> values) throws Exception {
+            RecordLogical recordToBeInserted = new RecordLogical(this);
+            int index = 0;
+            int npIndex = 0;
+            for (Column column : columnDetails) {
+                ValueWrapper valueWrapper = new ValueWrapper(column);
+                valueWrapper.setWithNull(values.get(index));
+                ++index;
+                if (column.primary >= 0) {
+                    recordToBeInserted.primaryKeyValues[column.primary] = valueWrapper;
+                } else {
+                    recordToBeInserted.nonPrimaryKeyValues[npIndex] = valueWrapper;
+                    ++npIndex;
+                }
+            }
+
+            // TODO: validation (check for constraint)
+
+            /* B-LINK TREE */
+            IndexPage rootPage = (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexRootPageIndex);
+
+            Pair<Boolean, IndexPage.RecordInPage> result = rootPage.scanInternal(transactionId, recordToBeInserted.primaryKeyValues);
+            if (result.left) {
+                throw new Exception("The primary key value is already existed.");
+            }
+            // TODO:
+            // depends on the result, we may move right or move down on the B-link tree.
+            // depends on the status of the page, we may split it.
+            rootPage.insertDataRecordInternal(transactionId, recordToBeInserted, result.right);
+        }
     }
 
     public TableMetadata metadata;
@@ -194,14 +259,6 @@ public class Table {
         // TODO
     }
 
-    public void insertRecord(long transactionId, ArrayList<byte[]> values) {
-        // TODO
-        /* computed inner table. */
-
-
-        /* check for constraint */
-        // TODO: constraint lock
-    }
 
     public void delete() {
         // TODO

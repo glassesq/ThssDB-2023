@@ -9,6 +9,10 @@ public class Configuration {
 
     public final int pageSize = 16 * 1024;
 
+
+    public final int overallPageIndex = 0;
+    public final int indexRootPageIndex = 2;
+
     /**
      * When {@code allow_implicit_transaction} is set to false,
      * any statement without an explicit 'begin transaction' will be rejected.

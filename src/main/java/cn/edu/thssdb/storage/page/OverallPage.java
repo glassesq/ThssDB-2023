@@ -42,6 +42,7 @@ public class OverallPage extends ExtentManagePage {
         overallPage.pageId = pageId;
         if (!temporary) {
             IO.traceNewPage(overallPage);
+            overallPage.pageType = OVERALL_PAGE;
             overallPage.setup();
             overallPage.writeFILHeader(transactionId);
             overallPage.writeTablespace(transactionId);

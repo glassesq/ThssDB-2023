@@ -21,6 +21,7 @@ package cn.edu.thssdb.parser;
 import cn.edu.thssdb.plan.LogicalPlan;
 import cn.edu.thssdb.plan.impl.CreateDatabasePlan;
 import cn.edu.thssdb.plan.impl.CreateTablePlan;
+import cn.edu.thssdb.plan.impl.InsertPlan;
 import cn.edu.thssdb.plan.impl.UseDatabasePlan;
 import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.schema.Column;
@@ -28,6 +29,9 @@ import cn.edu.thssdb.schema.Table;
 import cn.edu.thssdb.sql.SQLBaseVisitor;
 import cn.edu.thssdb.sql.SQLParser;
 import cn.edu.thssdb.type.DataType;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
 
@@ -77,6 +81,31 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
         }
 
         return new CreateTablePlan(tableMetadata);
+    }
+
+    public LogicalPlan visitInsertStmt(SQLParser.InsertStmtContext ctx) {
+        String tableName = ctx.tableName().getText();
+
+        List<SQLParser.ColumnNameContext> columnNames = ctx.columnName();
+        ArrayList<String> columnName = new ArrayList<>();
+        for (SQLParser.ColumnNameContext column : columnNames) {
+            columnName.add(column.getText());
+        }
+
+        List<SQLParser.ValueEntryContext> valueEntries = ctx.valueEntry();
+        ArrayList<ArrayList<String>> values = new ArrayList<>();
+        for (SQLParser.ValueEntryContext valueEntry : valueEntries) {
+            if (columnName.size() > 0 && valueEntry.literalValue().size() != columnName.size()) {
+                return new InsertPlan(tableName, true);
+            }
+            ArrayList<String> value = new ArrayList<>();
+            for (SQLParser.LiteralValueContext literalValueContext : valueEntry.literalValue()) {
+                value.add(literalValueContext.getText());
+            }
+            values.add(value);
+        }
+
+        return new InsertPlan(tableName, columnName, values);
     }
 
     // TODO: parser to more logical plan
