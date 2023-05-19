@@ -8,11 +8,12 @@ import org.json.JSONObject;
 import java.util.HashMap;
 
 public class Database {
-    // private String name;
-    // ReentrantReadWriteLock lock;
     public static class DatabaseMetadata {
         public String name;
         public int databaseId;
+        /**
+         * spaceId to tableMetadata
+         */
         public HashMap<Integer, Table.TableMetadata> tables = new HashMap<>();
         JSONObject object;
 
@@ -92,31 +93,33 @@ public class Database {
             return null;
         }
 
-    }
-
-    private void persist() {
-        // TODO
-    }
+        private void persist() {
+            // TODO
+        }
 
 
-    private void deleteDatabase() {
-        // TODO
+        private void deleteDatabase() {
+            // TODO
+        }
+
+        public void drop() {
+            // TODO
+        }
+
+        public String select() {
+            // TODO
+            return null;
+        }
+
+        private void recover() {
+            // TODO
+        }
+
+        public void quit() {
+            // TODO
+        }
+
     }
 
-    public void drop() {
-        // TODO
-    }
 
-    public String select() {
-        // TODO
-        return null;
-    }
-
-    private void recover() {
-        // TODO
-    }
-
-    public void quit() {
-        // TODO
-    }
 }

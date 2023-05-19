@@ -368,7 +368,9 @@ public class IndexPage extends Page {
         ArrayList<RecordLogical> recordList = new ArrayList<>();
         RecordInPage record = infimumRecord;
         while (record != supremeRecord) {
-            recordList.add(new RecordLogical(record, metadata));
+            if (record != infimumRecord) {
+                recordList.add(new RecordLogical(record, metadata));
+            }
             record = record.nextRecordInPage;
         }
         return recordList;
@@ -444,7 +446,7 @@ public class IndexPage extends Page {
                 System.arraycopy(recordToBeInserted.primaryKeyValues[column.primary].bytes, 0, record.primaryKeys, primaryOffsetList.get(column.primary), column.getLength());
             } else {
                 record.nonPrimaryKeyValues[npIndex] = new ValueWrapper(recordToBeInserted.nonPrimaryKeyValues[npIndex]);
-                System.arraycopy(recordToBeInserted.primaryKeyValues[npIndex].bytes, 0, record.nonPrimaryKeys, nonPrimaryOffset, column.getLength());
+                System.arraycopy(recordToBeInserted.nonPrimaryKeyValues[npIndex].bytes, 0, record.nonPrimaryKeys, nonPrimaryOffset, column.getLength());
                 nonPrimaryOffset += column.getLength();
                 ++npIndex;
             }
@@ -491,7 +493,7 @@ public class IndexPage extends Page {
         while (record != supremeRecord) {
             System.out.println(Arrays.toString(searchKey[0].bytes));
             System.out.println(Arrays.toString(record.primaryKeyValues[0].bytes));
-            int compareResult = ValueWrapper.compareArray(record.primaryKeyValues, searchKey);
+            int compareResult = ValueWrapper.compareArray(searchKey, record.primaryKeyValues);
             if (compareResult == 0) {
                 System.out.println(Arrays.toString(record.primaryKeyValues));
                 return new Pair<>(true, record);

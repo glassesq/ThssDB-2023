@@ -13,8 +13,10 @@ import cn.edu.thssdb.utils.StatusUtil;
 
 import java.util.ArrayList;
 
+/**
+ * The runtime of one session.
+ */
 public class SessionRuntime {
-    /* The runtime of one session. */
 
     /**
      * current database under the session's use.

@@ -1,5 +1,6 @@
 package cn.edu.thssdb.schema;
 
+import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.type.DataType;
 
 import java.nio.charset.StandardCharsets;
@@ -9,8 +10,9 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
     /**
      * raw bytes value
      */
-    public boolean isNull = false;
     public byte[] bytes;
+    private int strLength;
+    public boolean isNull = false;
     public DataType type;
     /**
      * If this value is stored offPage;
@@ -35,6 +37,15 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
         this.bytes = Arrays.copyOf(bytes, length);
         this.type = type;
         this.offPage = offPage;
+        if (this.type == DataType.STRING) {
+            this.strLength = length;
+            for (int i = 0; i < length; i++) {
+                if (bytes[i] == 0) {
+                    this.strLength = i;
+                    break;
+                }
+            }
+        }
     }
 
     /**
@@ -47,6 +58,7 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
         this.bytes = Arrays.copyOf(o.bytes, o.bytes.length);
         this.type = o.type;
         this.offPage = o.offPage;
+        this.strLength = o.strLength;
     }
 
     public void setWithNull(String str) {
@@ -55,7 +67,12 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
             isNull = true;
         } else {
             if (str.startsWith("'") && str.endsWith("'")) {
-                set(str.substring(1, str.length() - 1));
+                StringBuilder builder = new StringBuilder(str.substring(1, str.length() - 1));
+                int add = (bytes.length / ServerRuntime.config.maxCharsetLength) - (str.length() - 2);
+                System.out.println(bytes.length);
+                System.out.println("add:" + add);
+                for (int i = 0; i < add; i++) builder.append(" ");
+                set(builder.toString());
             } else {
                 set(str);
             }
@@ -102,6 +119,13 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
                 bytes[6] = (byte) (longValue >> 8);
                 bytes[7] = (byte) longValue;
                 break;
+            case STRING:
+                byte[] stringBytes = string.getBytes(StandardCharsets.UTF_8);
+                this.bytes = new byte[this.bytes.length];
+                System.arraycopy(stringBytes, 0, bytes, 0, stringBytes.length);
+                strLength = stringBytes.length;
+                break;
+
         }
 
 
@@ -109,7 +133,6 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
 
     @Override
     public int compareTo(ValueWrapper o) {
-        // TODO: compare for DOUBLE and FLOAT type.
         switch (type) {
             case INT:
                 return Integer.compare(parseIntegerBig(), o.parseIntegerBig());
@@ -161,7 +184,8 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
             case LONG:
                 return String.valueOf(parseLongBig());
             case STRING:
-                return new String(bytes, StandardCharsets.UTF_8);
+                System.out.println(strLength);
+                return new String(bytes, 0, strLength, StandardCharsets.UTF_8);
             case DOUBLE:
                 return String.valueOf(Double.longBitsToDouble(parseLongBig()));
             case FLOAT:

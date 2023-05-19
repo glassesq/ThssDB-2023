@@ -19,7 +19,6 @@ import java.util.HashMap;
  * The shared TableMetadata Object is under the control of ServerRuntime.
  */
 public class Table {
-    //    ReentrantReadWriteLock lock;
 
     public static class TableMetadata {
         // TODO: Lock is allocated at the unit of transaction.
@@ -40,10 +39,21 @@ public class Table {
          * if the table is inited (The relevant tablespace file is already in disk buffer or disk.)
          */
         public boolean inited = false;
+        /**
+         * ColumnName to column index
+         */
         public HashMap<String, Integer> columns = new HashMap<>();
+        /**
+         * column index to column object (detail)
+         */
         public ArrayList<Column> columnDetails = new ArrayList<>();
-
+        /**
+         * Json object of overall table metadata
+         */
         public JSONObject object;
+        /**
+         * Json arrays of column object
+         */
         public JSONArray columnObjectArray;
 
         public int getPrimaryKeyNumber() {
@@ -163,7 +173,8 @@ public class Table {
             metadata.columnObjectArray = object.getJSONArray("columns");
             for (int i = 0; i < metadata.columnObjectArray.length(); i++) {
                 Column column = Column.parse(metadata.columnObjectArray.getJSONObject(i));
-                metadata.columns.put(column.name, i);
+                String name = metadata.columnObjectArray.getJSONObject(i).getString("columnName");
+                metadata.columns.put(name, i);
                 metadata.columnDetails.add(column);
             }
 
@@ -198,9 +209,9 @@ public class Table {
             System.out.println("index root page over.");
         }
 
-        public void addColumn(Column column) {
+        public void addColumn(String name, Column column) {
             int size = columnDetails.size();
-            this.columns.put(column.name, size);
+            this.columns.put(name, size);
             this.columnDetails.add(column);
             columnObjectArray.put(column.object);
         }
@@ -241,6 +252,13 @@ public class Table {
             // depends on the result, we may move right or move down on the B-link tree.
             // depends on the status of the page, we may split it.
             rootPage.insertDataRecordInternal(transactionId, recordToBeInserted, result.right);
+
+            ArrayList<RecordLogical> records = rootPage.getAllRecordLogical(transactionId);
+            System.out.println("******************* values currently in rootPage:");
+            for (RecordLogical recordLogical : records) {
+                System.out.println(recordLogical);
+            }
+            System.out.println("**************************************************");
         }
     }
 

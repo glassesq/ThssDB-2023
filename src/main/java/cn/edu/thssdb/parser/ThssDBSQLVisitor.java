@@ -62,8 +62,7 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
             String strType = columnContext.typeName().getText();
             DataType type = Column.str2DataType(strType);
             int length = 0;
-            if (type == DataType.STRING) length =
-                    Integer.parseInt(strType.substring(7, strType.length() - 1)) * ServerRuntime.config.maxCharsetLength;
+            if (type == DataType.STRING) length = Integer.parseInt(strType.substring(7, strType.length() - 1));
             /* additional length are required for charset */
 
             Column column = new Column();
@@ -71,7 +70,7 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
             for (SQLParser.ColumnConstraintContext constraintContext : columnContext.columnConstraint()) {
                 column.setConstraint(constraintContext.getText());
             }
-            tableMetadata.addColumn(column);
+            tableMetadata.addColumn(name, column);
         }
 
         int order = 0;
