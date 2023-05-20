@@ -21,35 +21,34 @@ import java.util.Date;
 
 public class IServiceHandler implements IService.Iface {
 
+  @Override
+  public GetTimeResp getTime(GetTimeReq req) throws TException {
+    GetTimeResp resp = new GetTimeResp();
+    resp.setTime(new Date().toString());
+    resp.setStatus(new Status(Global.SUCCESS_CODE));
+    return resp;
+  }
 
-    @Override
-    public GetTimeResp getTime(GetTimeReq req) throws TException {
-        GetTimeResp resp = new GetTimeResp();
-        resp.setTime(new Date().toString());
-        resp.setStatus(new Status(Global.SUCCESS_CODE));
-        return resp;
+  @Override
+  public ConnectResp connect(ConnectReq req) throws TException {
+    long sid = ServerRuntime.newSession();
+    return new ConnectResp(StatusUtil.success(), sid);
+  }
+
+  @Override
+  public DisconnectResp disconnect(DisconnectReq req) throws TException {
+    ServerRuntime.closeSession(req.sessionId);
+    return new DisconnectResp(StatusUtil.success());
+  }
+
+  @Override
+  public ExecuteStatementResp executeStatement(ExecuteStatementReq req) throws TException {
+    if (!ServerRuntime.checkForSession(req.getSessionId())) {
+      return new ExecuteStatementResp(
+          StatusUtil.fail("You are not connected. Please connect first."), false);
     }
 
-    @Override
-    public ConnectResp connect(ConnectReq req) throws TException {
-        long sid = ServerRuntime.newSession();
-        return new ConnectResp(StatusUtil.success(), sid);
-    }
-
-    @Override
-    public DisconnectResp disconnect(DisconnectReq req) throws TException {
-        ServerRuntime.closeSession(req.sessionId);
-        return new DisconnectResp(StatusUtil.success());
-    }
-
-    @Override
-    public ExecuteStatementResp executeStatement(ExecuteStatementReq req) throws TException {
-        if (!ServerRuntime.checkForSession(req.getSessionId())) {
-            return new ExecuteStatementResp(StatusUtil.fail("You are not connected. Please connect first."), false);
-        }
-
-        LogicalPlan plan = LogicalGenerator.generate(req.statement);
-        return ServerRuntime.runPlan(req.getSessionId(), plan);
-
-    }
+    LogicalPlan plan = LogicalGenerator.generate(req.statement);
+    return ServerRuntime.runPlan(req.getSessionId(), plan);
+  }
 }

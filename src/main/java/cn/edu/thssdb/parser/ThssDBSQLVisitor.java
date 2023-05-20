@@ -35,77 +35,81 @@ import java.util.List;
 
 public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
 
-    @Override
-    public LogicalPlan visitCreateDbStmt(SQLParser.CreateDbStmtContext ctx) {
-        return new CreateDatabasePlan(ctx.databaseName().getText());
+  @Override
+  public LogicalPlan visitCreateDbStmt(SQLParser.CreateDbStmtContext ctx) {
+    return new CreateDatabasePlan(ctx.databaseName().getText());
+  }
+
+  @Override
+  public LogicalPlan visitUseDbStmt(SQLParser.UseDbStmtContext ctx) {
+    return new UseDatabasePlan(ctx.databaseName().getText());
+  }
+
+  /**
+   * visit create-table statement and prepare a metadata for it. This metadata is not managed by
+   * ServerRuntime by now.
+   *
+   * @param ctx the parse tree
+   * @return plan of create-table statement
+   */
+  @Override
+  public LogicalPlan visitCreateTableStmt(SQLParser.CreateTableStmtContext ctx) {
+    Table.TableMetadata tableMetadata = new Table.TableMetadata();
+    tableMetadata.prepare(ctx.tableName().getText(), ServerRuntime.newTablespace());
+
+    for (SQLParser.ColumnDefContext columnContext : ctx.columnDef()) {
+      String name = columnContext.columnName().getText();
+      String strType = columnContext.typeName().getText();
+      DataType type = Column.str2DataType(strType);
+      int length = 0;
+      if (type == DataType.STRING)
+        length = Integer.parseInt(strType.substring(7, strType.length() - 1));
+      /* additional length are required for charset */
+
+      Column column = new Column();
+      column.prepare(name, type, length);
+      for (SQLParser.ColumnConstraintContext constraintContext : columnContext.columnConstraint()) {
+        column.setConstraint(constraintContext.getText());
+      }
+      tableMetadata.addColumn(name, column);
     }
 
-    @Override
-    public LogicalPlan visitUseDbStmt(SQLParser.UseDbStmtContext ctx) {
-        return new UseDatabasePlan(ctx.databaseName().getText());
+    int order = 0;
+    for (SQLParser.ColumnNameContext columnNameContext : ctx.tableConstraint().columnName()) {
+      tableMetadata
+          .columnDetails
+          .get(tableMetadata.columns.get(columnNameContext.getText()))
+          .setPrimaryKey(order);
+      ++order;
     }
 
-    /**
-     * visit create-table statement and prepare a metadata for it.
-     * This metadata is not managed by ServerRuntime by now.
-     *
-     * @param ctx the parse tree
-     * @return plan of create-table statement
-     */
-    @Override
-    public LogicalPlan visitCreateTableStmt(SQLParser.CreateTableStmtContext ctx) {
-        Table.TableMetadata tableMetadata = new Table.TableMetadata();
-        tableMetadata.prepare(ctx.tableName().getText(), ServerRuntime.newTablespace());
+    return new CreateTablePlan(tableMetadata);
+  }
 
-        for (SQLParser.ColumnDefContext columnContext : ctx.columnDef()) {
-            String name = columnContext.columnName().getText();
-            String strType = columnContext.typeName().getText();
-            DataType type = Column.str2DataType(strType);
-            int length = 0;
-            if (type == DataType.STRING) length = Integer.parseInt(strType.substring(7, strType.length() - 1));
-            /* additional length are required for charset */
+  public LogicalPlan visitInsertStmt(SQLParser.InsertStmtContext ctx) {
+    String tableName = ctx.tableName().getText();
 
-            Column column = new Column();
-            column.prepare(name, type, length);
-            for (SQLParser.ColumnConstraintContext constraintContext : columnContext.columnConstraint()) {
-                column.setConstraint(constraintContext.getText());
-            }
-            tableMetadata.addColumn(name, column);
-        }
-
-        int order = 0;
-        for (SQLParser.ColumnNameContext columnNameContext : ctx.tableConstraint().columnName()) {
-            tableMetadata.columnDetails.get(tableMetadata.columns.get(columnNameContext.getText())).setPrimaryKey(order);
-            ++order;
-        }
-
-        return new CreateTablePlan(tableMetadata);
+    List<SQLParser.ColumnNameContext> columnNames = ctx.columnName();
+    ArrayList<String> columnName = new ArrayList<>();
+    for (SQLParser.ColumnNameContext column : columnNames) {
+      columnName.add(column.getText());
     }
 
-    public LogicalPlan visitInsertStmt(SQLParser.InsertStmtContext ctx) {
-        String tableName = ctx.tableName().getText();
-
-        List<SQLParser.ColumnNameContext> columnNames = ctx.columnName();
-        ArrayList<String> columnName = new ArrayList<>();
-        for (SQLParser.ColumnNameContext column : columnNames) {
-            columnName.add(column.getText());
-        }
-
-        List<SQLParser.ValueEntryContext> valueEntries = ctx.valueEntry();
-        ArrayList<ArrayList<String>> values = new ArrayList<>();
-        for (SQLParser.ValueEntryContext valueEntry : valueEntries) {
-            if (columnName.size() > 0 && valueEntry.literalValue().size() != columnName.size()) {
-                return new InsertPlan(tableName, true);
-            }
-            ArrayList<String> value = new ArrayList<>();
-            for (SQLParser.LiteralValueContext literalValueContext : valueEntry.literalValue()) {
-                value.add(literalValueContext.getText());
-            }
-            values.add(value);
-        }
-
-        return new InsertPlan(tableName, columnName, values);
+    List<SQLParser.ValueEntryContext> valueEntries = ctx.valueEntry();
+    ArrayList<ArrayList<String>> values = new ArrayList<>();
+    for (SQLParser.ValueEntryContext valueEntry : valueEntries) {
+      if (columnName.size() > 0 && valueEntry.literalValue().size() != columnName.size()) {
+        return new InsertPlan(tableName, true);
+      }
+      ArrayList<String> value = new ArrayList<>();
+      for (SQLParser.LiteralValueContext literalValueContext : valueEntry.literalValue()) {
+        value.add(literalValueContext.getText());
+      }
+      values.add(value);
     }
 
-    // TODO: parser to more logical plan
+    return new InsertPlan(tableName, columnName, values);
+  }
+
+  // TODO: parser to more logical plan
 }

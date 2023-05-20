@@ -22,19 +22,19 @@ import cn.edu.thssdb.plan.LogicalPlan;
 
 public class CreateDatabasePlan extends LogicalPlan {
 
-    private String databaseName;
+  private String databaseName;
 
-    public CreateDatabasePlan(String databaseName) {
-        super(LogicalPlanType.CREATE_DATABASE);
-        this.databaseName = databaseName;
-    }
+  public CreateDatabasePlan(String databaseName) {
+    super(LogicalPlanType.CREATE_DATABASE);
+    this.databaseName = databaseName;
+  }
 
-    public String getDatabaseName() {
-        return databaseName;
-    }
+  public String getDatabaseName() {
+    return databaseName;
+  }
 
-    @Override
-    public String toString() {
-        return "CreateDatabasePlan{" + "databaseName='" + databaseName + '\'' + '}';
-    }
+  @Override
+  public String toString() {
+    return "CreateDatabasePlan{" + "databaseName='" + databaseName + '\'' + '}';
+  }
 }
