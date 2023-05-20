@@ -51,6 +51,9 @@ public class OverallPage extends ExtentManagePage {
         overallPage.writeFILHeader(transactionId);
         overallPage.writeTablespace(transactionId);
         overallPage.writeExtentManager(transactionId);
+        overallPage.usePage(transactionId, 0);
+        overallPage.usePage(transactionId, 1);
+        overallPage.usePage(transactionId, 2);
         return overallPage;
     }
 
@@ -102,6 +105,7 @@ public class OverallPage extends ExtentManagePage {
      * @return allocated pageId.
      */
     public int allocatePage(long transactionId) throws Exception {
+        // TODO: latch
         if (availableExtents.length == 0) {
             throw new Exception("No extent can be allocated now. Further Implementation Needed.");
         }
@@ -110,6 +114,7 @@ public class OverallPage extends ExtentManagePage {
         int extentIdWithinManager = (availableExtents.nextOffset - 100) / 20;
 
         entry = currentAvailableExtentManager.extentEntries[extentIdWithinManager];
+        currentAvailableExtentManager.usePage(transactionId, extentIdWithinManager * 64 + availableExtents.nextPageId);
         allocatedPageId = entry.allocatePage() + extentIdWithinManager * 64 + availableExtents.nextPageId;
 
 

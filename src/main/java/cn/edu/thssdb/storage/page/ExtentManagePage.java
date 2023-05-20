@@ -66,6 +66,17 @@ public class ExtentManagePage extends Page {
         parseExtentEntry();
     }
 
+    public void usePage(long transactionId, int pageNumber) {
+        int extentNumber = pageNumber / 64;
+        int pageInExtent = pageNumber % 64;
+        extentEntries[extentNumber].pageStatus = extentEntries[extentNumber].pageStatus | ((long) 1 << pageInExtent);
+        extentEntries[extentNumber].writeOnlyBitmap(transactionId, this, 100 + extentNumber * 20);
+        int minAvailablePageId;
+        for (minAvailablePageId = 0; minAvailablePageId < 64; minAvailablePageId++) {
+            if ((extentEntries[extentNumber].pageStatus & ((long) 1 << minAvailablePageId)) != 0) break;
+        }
+        extentEntries[extentNumber].minAvailablePageId = minAvailablePageId;
+    }
 
     protected void parseExtentEntry() {
         for (int i = 0; i <= 255; i++) {

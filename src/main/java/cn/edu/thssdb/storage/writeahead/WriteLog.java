@@ -172,16 +172,14 @@ public class WriteLog {
         writeLogBufferLatch.writeLock().unlock();
     }
 
-    public static HashSet<Long> outputWriteLogToDisk(boolean fileLatchRequired) throws Exception {
+    public static void outputWriteLogToDisk(boolean fileLatchRequired) throws Exception {
         if (fileLatchRequired) WriteLog.writeLogFileLatch.lock();
 
         /* avoid writing WAL buffer and outputting it to disk simultaneously */
         WriteLog.writeLogBufferLatch.writeLock().lock();
 
-        HashSet<Long> dirtyPages = new HashSet<>();
         for (WriteLog.WriteLogEntry entry : WriteLog.buffer) {
             entry.writeToDisk();
-            if (entry.type == WriteLog.COMMON_LOG) dirtyPages.add(((long) entry.spaceId << 32) | entry.pageId);
         }
         WriteLog.buffer.clear();
 
@@ -189,8 +187,6 @@ public class WriteLog {
         WriteLog.writeLogBufferLatch.writeLock().unlock();
 
         if (fileLatchRequired) WriteLog.writeLogFileLatch.unlock();
-
-        return dirtyPages;
     }
 
 

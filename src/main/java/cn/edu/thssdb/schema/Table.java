@@ -119,6 +119,22 @@ public class Table {
         }
 
         /**
+         * get the length or record in page
+         *
+         * @param type record type
+         * @return max length
+         */
+        public int getMaxRecordLength(int type) {
+            switch (type) {
+                case IndexPage.RecordInPage.USER_POINTER_RECORD:
+                    return 4 + 4 + getPrimaryKeyLength() + getNullBitmapLengthInByte();
+                case IndexPage.RecordInPage.USER_DATA_RECORD:
+                default:
+                    return 4 + 15 + getPrimaryKeyLength() + getNonPrimaryKeyLength() + getNullBitmapLengthInByte();
+            }
+        }
+
+        /**
          * get offset of each primaryKey
          * TODO: optimization
          *

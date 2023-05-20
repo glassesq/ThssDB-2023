@@ -38,12 +38,12 @@ public class IndexPage extends Page {
 
         /* ************** base point of the record ***************** */
         /* primary key */
-        public byte[] primaryKeys;
+        private byte[] primaryKeys;
 
         /**
          * this field stores parsed value of primaryKey, ready for comparison
          */
-        ValueWrapper[] primaryKeyValues = null;
+        public ValueWrapper[] primaryKeyValues;
         public long updateTransactionId = 0;
         public long rollPointer = 0;
         public int childPageId = 0;
@@ -54,11 +54,43 @@ public class IndexPage extends Page {
         /**
          * this field stores parsed value of nonPrimaryKey, ready for comparison
          */
-        ValueWrapper[] nonPrimaryKeyValues = null;
+        public ValueWrapper[] nonPrimaryKeyValues;
         public static final byte SYSTEM_INFIMUM_RECORD = 0;
         public static final byte SYSTEM_SUPREME_RECORD = 1;
         public static final byte USER_DATA_RECORD = 2;
         public static final byte USER_POINTER_RECORD = 3;
+
+        public RecordInPage() {
+        }
+
+        /**
+         * copy constructor
+         *
+         * @param record record to copy
+         */
+        public RecordInPage(RecordInPage record) {
+            this.myOffset = record.myOffset;
+            this.nullBitmap = Arrays.copyOf(record.nullBitmap, record.nullBitmap.length);
+            this.flags = record.flags;
+            this.numberRecordOwnedInDirectory = record.numberRecordOwnedInDirectory;
+            this.recordType = record.recordType;
+            this.nextAbsoluteOffset = 0;
+            this.primaryKeys = Arrays.copyOf(record.primaryKeys, record.primaryKeys.length);
+            this.primaryKeyValues = new ValueWrapper[record.primaryKeyValues.length];
+            for (int i = 0; i < primaryKeyValues.length; i++) {
+                this.primaryKeyValues[i] = new ValueWrapper(record.primaryKeyValues[i]);
+            }
+            this.updateTransactionId = record.updateTransactionId;
+            this.rollPointer = record.rollPointer;
+            this.childPageId = record.childPageId;
+            this.nonPrimaryKeys = Arrays.copyOf(record.nonPrimaryKeys, record.nonPrimaryKeys.length);
+            this.nonPrimaryKeyValues = new ValueWrapper[record.nonPrimaryKeyValues.length];
+            for (int i = 0; i < nonPrimaryKeyValues.length; i++) {
+                this.nonPrimaryKeyValues[i] = new ValueWrapper(this.nonPrimaryKeyValues[i]);
+            }
+            this.previousRecordInPage = null;
+            this.nextRecordInPage = null;
+        }
 
         public static RecordInPage createRecordInPageEntry(byte recordType, int primaryKeyLength, int nonPrimaryKeyLength, int nullBitmapLength, int nextAbsoluteOffset) {
             RecordInPage entry = new RecordInPage();
@@ -69,12 +101,14 @@ public class IndexPage extends Page {
                     entry.nonPrimaryKeys = new byte[0];
                     entry.nullBitmap = new byte[0];
                     entry.nextAbsoluteOffset = 52 + 10;
+                    entry.myOffset = 52 + 4;
                     break;
                 case SYSTEM_SUPREME_RECORD:
                     entry.primaryKeys = "ax".getBytes(StandardCharsets.US_ASCII);
                     entry.nonPrimaryKeys = new byte[0];
                     entry.nullBitmap = new byte[0];
                     entry.nextAbsoluteOffset = 52 + 4;
+                    entry.myOffset = 52 + 10;
                     break;
                 case USER_DATA_RECORD:
                     entry.primaryKeys = new byte[primaryKeyLength];
@@ -121,7 +155,7 @@ public class IndexPage extends Page {
                     this.primaryKeyValues = null;
 
                     this.nonPrimaryKeys = new byte[0];
-                    this.nonPrimaryKeyValues = null;
+                    this.nonPrimaryKeyValues = new ValueWrapper[0];
                     return;
                 case (SYSTEM_INFIMUM_RECORD):
                     this.nullBitmap = new byte[0];
@@ -130,7 +164,7 @@ public class IndexPage extends Page {
                     this.primaryKeyValues = null;
 
                     this.nonPrimaryKeys = new byte[0];
-                    this.nonPrimaryKeyValues = null;
+                    this.nonPrimaryKeyValues = new ValueWrapper[0];
                     break;
                 case (USER_POINTER_RECORD):
                     this.nullBitmap = new byte[0];
@@ -140,7 +174,7 @@ public class IndexPage extends Page {
                     this.primaryKeyValues = new ValueWrapper[metadata.getPrimaryKeyNumber()];
 
                     this.nonPrimaryKeys = new byte[0];
-                    this.nonPrimaryKeyValues = null;
+                    this.nonPrimaryKeyValues = new ValueWrapper[0];
 
                     primaryOffsetList = metadata.getPrimaryOffsetInOrder();
                     for (int i = 0; i < metadata.columnDetails.size(); i++) {
@@ -310,7 +344,18 @@ public class IndexPage extends Page {
         indexPage.writeIndexHeader(transactionId);
         indexPage.infimumRecord.write(transactionId, indexPage, 52 + 4);
         indexPage.supremeRecord.write(transactionId, indexPage, 52 + 10);
+        indexPage.infimumRecord.nextRecordInPage = indexPage.supremeRecord;
+        indexPage.supremeRecord.previousRecordInPage = indexPage.infimumRecord;
         return indexPage;
+    }
+
+    /**
+     * if the index node is the root node.
+     *
+     * @return true if it is the root.
+     */
+    public boolean isRoot() {
+        return pageLevel == 0;
     }
 
     public void parseIndexHeader() {
@@ -321,6 +366,17 @@ public class IndexPage extends Page {
         numberValidRecords = parseShortBig(32 + 8);
         maxTransactionId = parseLongBig(32 + 10);
         /* RESERVED for 20 byte */
+    }
+
+    public void writeAll(long transactionId) {
+        writeFILHeader(transactionId);
+        writeIndexHeader(transactionId);
+        RecordInPage record = infimumRecord;
+        while (true) {
+            record.write(transactionId, this, record.myOffset);
+            if (record == this.supremeRecord) break;
+            record = record.nextRecordInPage;
+        }
     }
 
     /**
@@ -414,12 +470,18 @@ public class IndexPage extends Page {
      * @param transactionId      transaction
      * @param recordToBeInserted record to be inserted
      * @param nextRecord         record that is just after the record to be inserted
+     * @return true if success, false if there is not enough space for the record to be inserted.
      */
-    public void insertDataRecordInternal(long transactionId, RecordLogical recordToBeInserted, RecordInPage nextRecord) {
+    public boolean insertDataRecordInternal(long transactionId, RecordLogical recordToBeInserted, RecordInPage nextRecord) {
         // avoid writing simultaneously
         bLinkTreeLatch.lock();
 
         Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
+        if (freespaceStart + metadata.getMaxRecordLength(DATA_PAGE) >= ServerRuntime.config.pageSize) {
+            bLinkTreeLatch.unlock();
+            return false;
+        }
+
         int primaryKeyLength = metadata.getPrimaryKeyLength();
         int nonPrimaryKeyLength = metadata.getNonPrimaryKeyLength();
         int nullBitmapLength = metadata.getNullBitmapLengthInByte();
@@ -473,6 +535,125 @@ public class IndexPage extends Page {
         System.out.println("##############################");
 
         // avoid writing simultaneously
+        bLinkTreeLatch.unlock();
+
+        return true;
+    }
+
+    /**
+     * split current node which is root
+     *
+     * @param transactionId transactionId
+     * @throws Exception IO error
+     */
+    public void splitRoot(long transactionId) throws Exception {
+        bLinkTreeLatch.lock();
+
+        OverallPage overallPage = (OverallPage) IO.read(this.spaceId, ServerRuntime.config.overallPageIndex);
+        int leftPageId = overallPage.allocatePage(transactionId);
+        int rightPageId = overallPage.allocatePage(transactionId);
+        IndexPage leftPage = createIndexPage(transactionId, this.spaceId, leftPageId);
+        IndexPage rightPage = createIndexPage(transactionId, this.spaceId, rightPageId);
+
+        Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
+        ArrayList<RecordInPage> recordInPage = new ArrayList<>();
+        RecordInPage record = this.infimumRecord;
+        while (record != supremeRecord) {
+            if (record != infimumRecord) recordInPage.add(record);
+            record = record.nextRecordInPage;
+        }
+
+        int size = recordInPage.size();
+
+        RecordInPage prevRecord = leftPage.infimumRecord;
+        int currentPos = 64 + metadata.getNullBitmapLengthInByte() + 4;
+        for (int i = 0; i < size / 2; i++) {
+            RecordInPage shadowRecord = new RecordInPage(recordInPage.get(i));
+            shadowRecord.myOffset = currentPos;
+            shadowRecord.previousRecordInPage = prevRecord;
+
+            prevRecord.nextAbsoluteOffset = currentPos;
+            prevRecord.nextRecordInPage = shadowRecord;
+
+            currentPos = currentPos + metadata.getMaxRecordLength(shadowRecord.recordType);
+
+            prevRecord = shadowRecord;
+            if (i + 1 >= size / 2) {
+                shadowRecord.nextAbsoluteOffset = 52 + 10;
+                shadowRecord.nextRecordInPage = leftPage.supremeRecord;
+                leftPage.supremeRecord.previousRecordInPage = shadowRecord;
+            }
+        }
+
+        prevRecord = rightPage.infimumRecord;
+        currentPos = 64 + metadata.getNullBitmapLengthInByte() + 4;
+        for (int i = size / 2; i < size; i++) {
+            RecordInPage shadowRecord = new RecordInPage(recordInPage.get(i));
+            shadowRecord.myOffset = currentPos;
+            shadowRecord.previousRecordInPage = prevRecord;
+
+            prevRecord.nextAbsoluteOffset = currentPos;
+            prevRecord.nextRecordInPage = shadowRecord;
+
+            currentPos = currentPos + metadata.getMaxRecordLength(shadowRecord.recordType);
+
+            prevRecord = shadowRecord;
+            if (i + 1 >= size) {
+                shadowRecord.nextAbsoluteOffset = 52 + 10;
+                shadowRecord.nextRecordInPage = rightPage.supremeRecord;
+                rightPage.supremeRecord.previousRecordInPage = shadowRecord;
+            }
+
+        }
+
+        RecordInPage leftPointerRecord = RecordInPage.createRecordInPageEntry(RecordInPage.USER_POINTER_RECORD, metadata.getPrimaryKeyLength(), metadata.getNonPrimaryKeyLength(), metadata.getNullBitmapLengthInByte(), 0);
+        record = leftPage.supremeRecord.previousRecordInPage;
+        System.arraycopy(record.primaryKeys, 0, leftPointerRecord.primaryKeys, 0, metadata.getPrimaryKeyLength());
+        leftPointerRecord.primaryKeyValues = new ValueWrapper[record.primaryKeyValues.length];
+        for (int i = 0; i < record.primaryKeyValues.length; i++) {
+            leftPointerRecord.primaryKeyValues[i] = new ValueWrapper(record.primaryKeyValues[i]);
+        }
+
+        RecordInPage rightPointerRecord = RecordInPage.createRecordInPageEntry(RecordInPage.USER_POINTER_RECORD, metadata.getPrimaryKeyLength(), metadata.getNonPrimaryKeyLength(), metadata.getNullBitmapLengthInByte(), 0);
+        record = rightPage.supremeRecord.previousRecordInPage;
+        System.arraycopy(rightPage.supremeRecord.previousRecordInPage.primaryKeys, 0, rightPointerRecord.primaryKeys, 0, metadata.getPrimaryKeyLength());
+        rightPointerRecord.primaryKeyValues = new ValueWrapper[record.primaryKeyValues.length];
+        for (int i = 0; i < record.primaryKeyValues.length; i++) {
+            rightPointerRecord.primaryKeyValues[i] = new ValueWrapper(record.primaryKeyValues[i]);
+        }
+
+        leftPointerRecord.myOffset = leftPage.freespaceStart + 4 + metadata.getNullBitmapLengthInByte();
+        rightPointerRecord.myOffset = leftPointerRecord.myOffset + 4 + metadata.getNullBitmapLengthInByte();
+
+        leftPointerRecord.nextRecordInPage = rightPointerRecord;
+        leftPointerRecord.previousRecordInPage = infimumRecord;
+        leftPointerRecord.nextAbsoluteOffset = rightPointerRecord.myOffset;
+        leftPointerRecord.childPageId = leftPageId;
+
+        rightPointerRecord.nextRecordInPage = supremeRecord;
+        rightPointerRecord.previousRecordInPage = leftPointerRecord;
+        rightPointerRecord.nextAbsoluteOffset = supremeRecord.myOffset;
+        rightPointerRecord.childPageId = rightPageId;
+
+        supremeRecord.previousRecordInPage = rightPointerRecord;
+
+        infimumRecord.nextAbsoluteOffset = leftPointerRecord.myOffset;
+
+        /* BEGIN ATOMIC */
+        infimumRecord.nextRecordInPage = leftPointerRecord;
+        /* END ATOMIC */
+
+        /* update info */
+        leftPage.pageLevel = 1;
+        leftPage.nextPageId = rightPageId;
+
+        rightPage.pageLevel = 1;
+        rightPage.previousPageId = leftPageId;
+
+        leftPage.writeAll(transactionId);
+        rightPage.writeAll(transactionId);
+        this.writeAll(transactionId);
+
         bLinkTreeLatch.unlock();
     }
 

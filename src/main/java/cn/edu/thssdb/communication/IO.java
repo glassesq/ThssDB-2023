@@ -12,8 +12,7 @@ import java.util.HashSet;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static cn.edu.thssdb.runtime.ServerRuntime.config;
-import static cn.edu.thssdb.storage.writeahead.WriteLog.CHECKPOINT_LOG;
-import static cn.edu.thssdb.storage.writeahead.WriteLog.writeLogFileLatch;
+import static cn.edu.thssdb.storage.writeahead.WriteLog.*;
 
 public class IO {
     static HashSet<Long> dirtyPages = new HashSet<>();
@@ -49,6 +48,7 @@ public class IO {
         /* Write the changes to disk buffer */
         /* Latch for page reading is not needed because of our design avoid reading from bytes directly. */
 
+        dirtyPageLatch.lock();
         /* avoid writing and outputting page simultaneously */
         page.pageWriteAndOutputLatch.lock();
 
@@ -69,13 +69,16 @@ public class IO {
 
         /* Write-Ahead Log */
         /* only add write log when there is actually change. */
-        if (dirty)
+        if (dirty) {
             WriteLog.addCommonLog(transactionId, page.spaceId, page.pageId, offset, length, oldValue, realNewValue);
-
+            dirtyPages.add(DiskBuffer.concat(page.spaceId, page.pageId));
+        }
 
         /* avoid writing and outputting page simultaneously */
         /* we slightly delay the release of this latch. This is to avoid reversing of the Write-ahead log's order. */
         page.pageWriteAndOutputLatch.unlock();
+
+        dirtyPageLatch.unlock();
     }
 
     /**
@@ -83,11 +86,7 @@ public class IO {
      */
     private static void pushWriteAheadLogOnly() throws Exception {
         /* push all write log records in buffer to disk */
-        HashSet<Long> temporaryDirtyPages = WriteLog.outputWriteLogToDisk(true);
-
-        dirtyPageLatch.lock();
-        dirtyPages.addAll(temporaryDirtyPages);
-        dirtyPageLatch.unlock();
+        WriteLog.outputWriteLogToDisk(true);
     }
 
     /**
@@ -97,22 +96,25 @@ public class IO {
      * @throws Exception IO error
      */
     public static void pushAndWriteCheckpoint() throws Exception {
-
         writeLogFileLatch.lock();
 
-        /* output all dirty relevant pages to disk */
+        /* make sure there will be no writing logs here. */
         dirtyPageLatch.lock();
 
-        // TODO: we should not output all write logs, but only those that are relevant to the current checkpoint.
-        HashSet<Long> temporaryDirtyPages = WriteLog.outputWriteLogToDisk(false /* , other parameter */);
-        dirtyPages.addAll(temporaryDirtyPages);
-
-        for (Long spId : dirtyPages) {
-            DiskBuffer.output((int) (spId >> 32), spId.intValue());
+        HashSet<Long> shadows = new HashSet<>(dirtyPages);
+        for (Long spId : shadows) {
+            DiskBuffer.getFromBuffer(spId).pageWriteAndOutputLatch.lock();
         }
         dirtyPages.clear();
 
+        WriteLog.outputWriteLogToDisk(false);
+
         dirtyPageLatch.unlock();
+
+        /* output all dirty relevant pages to disk */
+        for (Long spId : shadows) {
+            DiskBuffer.output((int) (spId >> 32), spId.intValue());
+        }
 
         // TODO: metadata Latch
         /* output all metadata to disk */

@@ -141,7 +141,7 @@ public class DiskBuffer {
         Page page = getFromBuffer(concat(spaceId, pageId));
 
         /* avoid writing and outputting page simultaneously */
-        page.pageWriteAndOutputLatch.lock();
+        /* already locked in pushAndWriteCheckpoint */
 
         String tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
         RandomAccessFile tablespaceFile = new RandomAccessFile(tablespaceFilename, "rw");
