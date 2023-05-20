@@ -203,9 +203,9 @@ public class Table {
                 throw new Exception("create tablespace file failed.");
             }
 
-            OverallPage.createOverallPage(transactionId, spaceId, 0, false);
+            OverallPage.createOverallPage(transactionId, spaceId, 0);
             System.out.println("overall page over.");
-            IndexPage indexPage = IndexPage.createIndexPage(transactionId, spaceId, 2, false);
+            IndexPage indexPage = IndexPage.createIndexPage(transactionId, spaceId, 2);
             System.out.println("index root page over.");
         }
 

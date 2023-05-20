@@ -11,6 +11,7 @@ import cn.edu.thssdb.utils.Pair;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class IndexPage extends Page {
 
@@ -24,6 +25,7 @@ public class IndexPage extends Page {
         /* public ArrayList<int> variableFieldLength; */
         public byte[] nullBitmap;
         public byte flags;
+        // TODO: deleted flag
         public byte numberRecordOwnedInDirectory;
         public byte recordType;
         public int nextAbsoluteOffset;
@@ -195,7 +197,7 @@ public class IndexPage extends Page {
          * @param pos           position of the record
          */
         public void write(long transactionId, Page page, int pos) {
-            // TODO
+            // TODO: variable length field
             int primaryKeyLength = primaryKeys.length;
             int nonPrimaryKeyLength = nonPrimaryKeys.length;
             int nullBitmapLength = nullBitmap.length;
@@ -275,8 +277,19 @@ public class IndexPage extends Page {
     public int numberValidRecords = 0;
     public long maxTransactionId = 0;
 
+    ReentrantLock bLinkTreeLatch = new ReentrantLock();
+
     RecordInPage infimumRecord;
     RecordInPage supremeRecord;
+
+    public IndexPage(byte[] bytes) {
+        super(bytes);
+        if (pageType == INDEX_PAGE) {
+            /* if the page is already set up */
+            parseIndexHeader();
+            parseAllRecords();
+        }
+    }
 
     /**
      * create an initialized index page.
@@ -284,24 +297,19 @@ public class IndexPage extends Page {
      * @param transactionId transactionId who creates this page
      * @param spaceId       spaceId
      * @param pageId        pageId
-     * @param temporary     if this paged is temporary
      * @return index page
      */
-    public static IndexPage createIndexPage(long transactionId, int spaceId, int pageId, boolean temporary) {
-        IndexPage indexPage = new IndexPage();
+    public static IndexPage createIndexPage(long transactionId, int spaceId, int pageId) {
+        IndexPage indexPage = new IndexPage(new byte[ServerRuntime.config.pageSize]);
         indexPage.spaceId = spaceId;
         indexPage.pageId = pageId;
-        if (!temporary) {
-            IO.traceNewPage(indexPage);
-            indexPage.pageType = INDEX_PAGE;
-            indexPage.setup();
-            indexPage.writeFILHeader(transactionId);
-            indexPage.writeIndexHeader(transactionId);
-            indexPage.infimumRecord.write(transactionId, indexPage, 52 + 4);
-            indexPage.supremeRecord.write(transactionId, indexPage, 52 + 10);
-        } else {
-            // TODO: temporary page.
-        }
+        IO.traceNewPage(indexPage);
+        indexPage.pageType = INDEX_PAGE;
+        indexPage.setup();
+        indexPage.writeFILHeader(transactionId);
+        indexPage.writeIndexHeader(transactionId);
+        indexPage.infimumRecord.write(transactionId, indexPage, 52 + 4);
+        indexPage.supremeRecord.write(transactionId, indexPage, 52 + 10);
         return indexPage;
     }
 
@@ -344,18 +352,6 @@ public class IndexPage extends Page {
     }
 
     /**
-     * parse the page from {@code page.bytes}.
-     * The {@code user record} part is not parsed.
-     */
-    @Override
-    public void parse() {
-        parseFILHeader();
-        // TODO: repeatedly parsing FIL Header. (performance consideration).
-        parseIndexHeader();
-        parseAllRecords();
-    }
-
-    /**
      * Parse the system + user record part of this page using {@code page.bytes}.
      * {@code this.spaceId} shall be parsed first.
      * <b> {@code this.spaceId} and its tableMetadata must be traceable in ServerRuntime. </b>
@@ -380,7 +376,7 @@ public class IndexPage extends Page {
      * Parse the system + user record part of this page using {@code page.bytes}.
      * Save them into this.records;
      * <b> {@code this.spaceId} and its tableMetadata must be traceable in ServerRuntime.</b>
-     * The method shall be only called once when inputing this page from disk.
+     * The method shall be only called once when inputting this page from disk.
      */
     private void parseAllRecords() {
         Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
@@ -420,7 +416,8 @@ public class IndexPage extends Page {
      * @param nextRecord         record that is just after the record to be inserted
      */
     public void insertDataRecordInternal(long transactionId, RecordLogical recordToBeInserted, RecordInPage nextRecord) {
-        // TODO: Lock on this page shall be added.
+        // avoid writing simultaneously
+        bLinkTreeLatch.lock();
 
         Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
         int primaryKeyLength = metadata.getPrimaryKeyLength();
@@ -465,7 +462,6 @@ public class IndexPage extends Page {
         record.previousRecordInPage.nextRecordInPage = record;
         /* END ATOMIC */
 
-        // TODO:
         this.freespaceStart = record.myOffset + primaryKeyLength + nonPrimaryKeyLength + 15;
         writeIndexHeader(transactionId);
         record.write(transactionId, this, record.myOffset);
@@ -476,7 +472,8 @@ public class IndexPage extends Page {
         System.out.println(record);
         System.out.println("##############################");
 
-        // TODO: releaseLock
+        // avoid writing simultaneously
+        bLinkTreeLatch.unlock();
     }
 
     /**

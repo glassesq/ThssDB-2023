@@ -9,21 +9,26 @@ import cn.edu.thssdb.storage.writeahead.WriteLog;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static cn.edu.thssdb.runtime.ServerRuntime.config;
 import static cn.edu.thssdb.storage.writeahead.WriteLog.CHECKPOINT_LOG;
+import static cn.edu.thssdb.storage.writeahead.WriteLog.writeLogFileLatch;
 
 public class IO {
+    static HashSet<Long> dirtyPages = new HashSet<>();
+
+    static ReentrantLock dirtyPageLatch = new ReentrantLock();
+
     /**
      * This method can be used safely due to the presence of locks.
-     * TODO: parse page according to the page type, free of other information.
      *
      * @param spaceId spaceId
      * @param pageId  pageId
      * @return not parsed Page
      */
     public static Page read(int spaceId, int pageId) throws Exception {
-        // TODO: LOCK
+        // TODO: Two-Phase Lock shall be implemented with transactionId
         return DiskBuffer.read(spaceId, pageId);
     }
 
@@ -41,8 +46,12 @@ public class IO {
     public static void write(long transactionId, Page page, int offset, int length, byte[] newValue, boolean redo_only) {
         // TODO: Two-phase Lock
 
-        // TODO: Latch For Page Writing
         /* Write the changes to disk buffer */
+        /* Latch for page reading is not needed because of our design avoid reading from bytes directly. */
+
+        /* avoid writing and outputting page simultaneously */
+        page.pageWriteAndOutputLatch.lock();
+
         boolean dirty = false;
         byte[] oldValue = new byte[0];
         byte[] realNewValue = new byte[length]; /* in case newValue.length != length */
@@ -57,72 +66,82 @@ public class IO {
                 realNewValue[s] = newValue[s];
             }
         }
+
         /* Write-Ahead Log */
         /* only add write log when there is actually change. */
         if (dirty)
             WriteLog.addCommonLog(transactionId, page.spaceId, page.pageId, offset, length, oldValue, realNewValue);
-        // TODO: release Latch (may be advanced)
+
+
+        /* avoid writing and outputting page simultaneously */
+        /* we slightly delay the release of this latch. This is to avoid reversing of the Write-ahead log's order. */
+        page.pageWriteAndOutputLatch.unlock();
     }
 
     /**
-     * Push every log in WAL buffer and relevant pages to disk.
-     * This method use {@code Latches} for actually page writing. The {@code latch} shall be released immediately.
-     * Latch is not the same lock using in two-phase transaction.
+     * Push every log in WAL buffer and mark relevant pages as dirty.
      */
-    private static void pushWALAndPages() throws Exception {
-        // TODO: Latch for WAL
+    private static void pushWriteAheadLogOnly() throws Exception {
         /* push all write log records in buffer to disk */
-        HashSet<Long> dirtyPages = new HashSet<>();
-        for (WriteLog.WriteLogEntry entry : WriteLog.buffer) {
-            entry.writeToDisk();
-            if (entry.type == WriteLog.COMMON_LOG) dirtyPages.add(((long) entry.spaceId << 32) | entry.pageId);
-        }
-        WriteLog.buffer.clear();
+        HashSet<Long> temporaryDirtyPages = WriteLog.outputWriteLogToDisk(true);
+
+        dirtyPageLatch.lock();
+        dirtyPages.addAll(temporaryDirtyPages);
+        dirtyPageLatch.unlock();
+    }
+
+    /**
+     * checkpoint
+     * push all updates to log file, data file and metadata file
+     *
+     * @throws Exception IO error
+     */
+    public static void pushAndWriteCheckpoint() throws Exception {
+
+        writeLogFileLatch.lock();
+
         /* output all dirty relevant pages to disk */
+        dirtyPageLatch.lock();
+
+        // TODO: we should not output all write logs, but only those that are relevant to the current checkpoint.
+        HashSet<Long> temporaryDirtyPages = WriteLog.outputWriteLogToDisk(false /* , other parameter */);
+        dirtyPages.addAll(temporaryDirtyPages);
+
         for (Long spId : dirtyPages) {
-            // TODO: Latch For Page Writing ( no transactions are allowed to write WAL buffer now. )
-            // Latch can be delayed to the actual page writing, due to the presence of WAL latches.
-            // No other transactions can modify pages without the obtaining of WAL latches.
-            // TODO: to discuss, we may move latches for pages into DiskBuffer.output function?
             DiskBuffer.output((int) (spId >> 32), spId.intValue());
-            // TODO: release latch For Page Writing ( no transactions are allowed to write WAL buffer now. )
         }
-        // TODO: release Latch for WAL
+        dirtyPages.clear();
+
+        dirtyPageLatch.unlock();
+
+        // TODO: metadata Latch
+        /* output all metadata to disk */
+        FileOutputStream metadataStream = new FileOutputStream(config.MetadataFilename);
+        metadataStream.write(ServerRuntime.metadataArray.toString().getBytes(StandardCharsets.UTF_8));
+        metadataStream.close();
+        // TODO: metadata Latch
+
+        /* write checkpoint */
+        WriteLog.WriteLogEntry entry = new WriteLog.WriteLogEntry(-1, CHECKPOINT_LOG);
+        entry.writeToDisk();
+
+        writeLogFileLatch.unlock();
     }
 
     public static void writeTransactionStart(long transactionId) throws Exception {
-        // TODO: latch
         WriteLog.addSpecialLog(transactionId, WriteLog.START_LOG);
-        // TODO: release latch
     }
 
     public static void writeCreateDatabase(long transactionId, String name, int databaseId) throws Exception {
-        // TODO: latch
         WriteLog.addSpecialDatabaseLog(transactionId, WriteLog.CREATE_DATABASE_LOG, databaseId, name.getBytes(StandardCharsets.UTF_8));
-        // TODO: release latch
     }
 
     public static void writeDeleteDatabase(long transactionId, String name, int databaseId) throws Exception {
-        // TODO: latch
         WriteLog.addSpecialDatabaseLog(transactionId, WriteLog.DELETE_DATABASE_LOG, databaseId, name.getBytes(StandardCharsets.UTF_8));
     }
 
     public static void writeCreateTable(long transactionId, int databaseId, Table.TableMetadata metadata) {
-        // TODO: latch
         WriteLog.addCreateTableLog(transactionId, databaseId, metadata);
-        // TODO: release latch
-    }
-
-    /**
-     * push all updates on metadataObject to disk
-     *
-     * @throws Exception write metadata file failed.
-     */
-    private static void pushMetadataUpdate() throws Exception {
-        // TODO: Lock for Metadata File.
-        FileOutputStream metadataStream = new FileOutputStream(config.MetadataFilename);
-        metadataStream.write(ServerRuntime.metadataArray.toString().getBytes(StandardCharsets.UTF_8));
-        metadataStream.close();
     }
 
     /**
@@ -133,20 +152,16 @@ public class IO {
      * @throws Exception WAL Error
      */
     public static void pushTransactionCommit(long transactionId) throws Exception {
-        // TODO: latch
         WriteLog.addSpecialLog(transactionId, WriteLog.COMMIT_LOG);
-        pushWALAndPages();
-        pushMetadataUpdate();
-        WriteLog.WriteLogEntry entry = new WriteLog.WriteLogEntry(-1, CHECKPOINT_LOG);
-        entry.writeToDisk();
-        // TODO: release latch
+        pushWriteAheadLogOnly(/* TODO: transactionId (maybe not output all.) */);
+
+        /* FOR TEST ONLY */
+        pushAndWriteCheckpoint();
     }
 
     public static void pushTransactionAbort(long transactionId) throws Exception {
-        // TODO: latch
-        // TODO: REDO pushWALAndPages();
         // WriteLog.addSpecialLog(transactionId, WriteLog.ABORT_LOG);
-        // TODO: release latch
+        // TODO: REDO process, call recover mechanism
     }
 
     /**
@@ -157,6 +172,6 @@ public class IO {
      * @param page page to be traced
      */
     public static void traceNewPage(Page page) {
-        DiskBuffer.put(page);
+        DiskBuffer.putToBuffer(page);
     }
 }

@@ -7,8 +7,15 @@ import cn.edu.thssdb.schema.Table;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class WriteLog {
+
+    public static ReentrantReadWriteLock writeLogBufferLatch = new ReentrantReadWriteLock();
+    public static ReentrantLock writeLogFileLatch = new ReentrantLock();
+
     public static class WriteLogEntry {
         byte[] newValue;
         byte[] oldValue;
@@ -106,7 +113,7 @@ public class WriteLog {
     /**
      * Write Ahead Log Buffer
      */
-    public static ArrayList<WriteLogEntry> buffer = new ArrayList<>();
+    private static ArrayList<WriteLogEntry> buffer = new ArrayList<>();
 
     /**
      * Add Common Write Log to WAL Buffer
@@ -120,9 +127,8 @@ public class WriteLog {
      * @param newValue      new value to write
      */
     public static void addCommonLog(long transactionId, int spaceId, int pageId, int offset, int length, byte[] oldValue, byte[] newValue) {
-        // TODO: Latch for WAL updates
+        writeLogBufferLatch.writeLock().lock();
 
-        // TODO: transaction ID
         WriteLogEntry entry;
         if (oldValue.length > 0) {
             entry = new WriteLogEntry(transactionId, spaceId, pageId, offset, length, oldValue, newValue, false);
@@ -132,31 +138,59 @@ public class WriteLog {
         entry.type = COMMON_LOG; /* 0 for common entry */
         buffer.add(entry);
 
-        // TODO: release Latch for WAL updates
-//        System.out.println(entry);
+        writeLogBufferLatch.writeLock().unlock();
     }
 
     public static void addSpecialLog(long transactionId, int type) {
-        // TODO: Latch for WAL updates
+        writeLogBufferLatch.writeLock().lock();
+
         WriteLogEntry entry = new WriteLogEntry(transactionId, type);
         buffer.add(entry);
-        // TODO: release latch for WAL updates
+
+        writeLogBufferLatch.writeLock().unlock();
     }
 
     public static void addSpecialDatabaseLog(long transactionId, int type, int databaseId, byte[] databaseName) {
-        // TODO: Latch for WAL updates
+        writeLogBufferLatch.writeLock().lock();
+
         WriteLogEntry entry = new WriteLogEntry(transactionId, type);
         entry.databaseId = databaseId;
         entry.newValue = databaseName;
         buffer.add(entry);
-        // TODO: release latch for WAL updates
+
+        writeLogBufferLatch.writeLock().unlock();
     }
 
     public static void addCreateTableLog(long transactionId, int databaseId, Table.TableMetadata metadata) {
+        writeLogBufferLatch.writeLock().lock();
+
         WriteLogEntry entry = new WriteLogEntry(transactionId, CREATE_TABLE_LOG);
         entry.databaseId = databaseId;
         entry.newValue = metadata.object.toString().getBytes(StandardCharsets.UTF_8);
         buffer.add(entry);
+
+        writeLogBufferLatch.writeLock().unlock();
+    }
+
+    public static HashSet<Long> outputWriteLogToDisk(boolean fileLatchRequired) throws Exception {
+        if (fileLatchRequired) WriteLog.writeLogFileLatch.lock();
+
+        /* avoid writing WAL buffer and outputting it to disk simultaneously */
+        WriteLog.writeLogBufferLatch.writeLock().lock();
+
+        HashSet<Long> dirtyPages = new HashSet<>();
+        for (WriteLog.WriteLogEntry entry : WriteLog.buffer) {
+            entry.writeToDisk();
+            if (entry.type == WriteLog.COMMON_LOG) dirtyPages.add(((long) entry.spaceId << 32) | entry.pageId);
+        }
+        WriteLog.buffer.clear();
+
+        /* avoid writing WAL buffer and outputting it to disk simultaneously */
+        WriteLog.writeLogBufferLatch.writeLock().unlock();
+
+        if (fileLatchRequired) WriteLog.writeLogFileLatch.unlock();
+
+        return dirtyPages;
     }
 
 

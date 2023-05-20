@@ -1,6 +1,7 @@
 package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.communication.IO;
+import cn.edu.thssdb.runtime.ServerRuntime;
 
 
 public class OverallPage extends ExtentManagePage {
@@ -29,38 +30,31 @@ public class OverallPage extends ExtentManagePage {
 
     public int flags;
 
-    /**
-     * create an overall page
-     *
-     * @param spaceId   spaceId
-     * @param pageId    pageId
-     * @param temporary if this is temporary
-     */
-    public static OverallPage createOverallPage(long transactionId, int spaceId, int pageId, boolean temporary) {
-        OverallPage overallPage = new OverallPage();
-        overallPage.spaceId = spaceId;
-        overallPage.pageId = pageId;
-        if (!temporary) {
-            IO.traceNewPage(overallPage);
-            overallPage.pageType = OVERALL_PAGE;
-            overallPage.setup();
-            overallPage.writeFILHeader(transactionId);
-            overallPage.writeTablespace(transactionId);
-            overallPage.writeExtentManager(transactionId);
-        } else {
-            // TODO: temporary page.
-        }
-        return overallPage;
-    }
-
-    @Override
-    public void parse() {
-        parseFILHeader();
-        parseExtentEntry();
+    public OverallPage(byte[] bytes) {
+        super(bytes);
         parseTablespace();
     }
 
-    public void parseTablespace() {
+    /**
+     * create an overall page
+     *
+     * @param spaceId spaceId
+     * @param pageId  pageId
+     */
+    public static OverallPage createOverallPage(long transactionId, int spaceId, int pageId) {
+        OverallPage overallPage = new OverallPage(new byte[ServerRuntime.config.pageSize]);
+        overallPage.spaceId = spaceId;
+        overallPage.pageId = pageId;
+        IO.traceNewPage(overallPage);
+        overallPage.pageType = OVERALL_PAGE;
+        overallPage.setup();
+        overallPage.writeFILHeader(transactionId);
+        overallPage.writeTablespace(transactionId);
+        overallPage.writeExtentManager(transactionId);
+        return overallPage;
+    }
+
+    private void parseTablespace() {
         maxPageId = parseIntegerBig(32 + 4);
         maxInitedPage = parseIntegerBig(32 + 8);
         currentDataPage = parseIntegerBig(32 + 12);

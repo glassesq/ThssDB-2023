@@ -148,7 +148,7 @@ public class ServerRuntime {
     public static String getTablespaceFile(int spaceId) {
         // TODO: read from metadata.
         // TODO: REPLACE FOR TEST
-        return "/Users/rongyi/Desktop/tablespace" + spaceId + ".tablespace";
+        return ServerRuntime.config.testPath + "/tablespace" + spaceId + ".tablespace";
     }
 
     /**
@@ -161,8 +161,7 @@ public class ServerRuntime {
     public static ExecuteStatementResp runPlan(long sessionId, LogicalPlan plan) {
         SessionRuntime sessionRuntime = sessions.get(sessionId);
         if (sessionRuntime == null) {
-            return new ExecuteStatementResp(StatusUtil.fail("SessionRuntime does not exist for session" + sessionId
-                    + ". Uncommitted actions shall be automatically aborted. Please connect to the server again."), false);
+            return new ExecuteStatementResp(StatusUtil.fail("SessionRuntime does not exist for session" + sessionId + ". Uncommitted actions shall be automatically aborted. Please connect to the server again."), false);
         }
         return sessionRuntime.runPlan(plan);
     }
@@ -207,8 +206,7 @@ public class ServerRuntime {
             /* FOR TEST */
             System.out.println("Metadata Load Successful from " + config.MetadataFilename);
             for (Integer k : databaseMetadata.keySet()) {
-                System.out.println("database " + databaseMetadata.get(k).databaseId + databaseMetadata.get(k).name
-                        + " with " + databaseMetadata.get(k).tables.size() + " tables");
+                System.out.println("database " + databaseMetadata.get(k).databaseId + databaseMetadata.get(k).name + " with " + databaseMetadata.get(k).tables.size() + " tables");
             }
         }
     }

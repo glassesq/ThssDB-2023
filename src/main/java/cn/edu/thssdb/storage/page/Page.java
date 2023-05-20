@@ -1,12 +1,15 @@
 package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.communication.IO;
-import cn.edu.thssdb.runtime.ServerRuntime;
+
+import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Basic class for all page
  */
 public class Page {
+
+    public ReentrantLock pageWriteAndOutputLatch = new ReentrantLock();
 
     /* FIL Header */
     /**
@@ -158,7 +161,12 @@ public class Page {
     }
 
     /* raw bytes of this page. */
-    public byte[] bytes = new byte[ServerRuntime.config.pageSize];
+    public byte[] bytes;
+
+    public Page(byte[] bytes) {
+        this.bytes = bytes;
+        parseFILHeader();
+    }
 
     public int parseIntegerBig(int pos) {
         return ((bytes[pos] & 0xFF) << 24) | ((bytes[pos + 1] & 0xFF) << 16) | ((bytes[pos + 2] & 0xFF) << 8) | (bytes[pos + 3] & 0xFF);
@@ -173,17 +181,15 @@ public class Page {
     }
 
     public long parseSevenByteBig(int pos) {
-        return (Integer.toUnsignedLong(parseIntegerBig(pos)) << 24) |
-                (Integer.toUnsignedLong(parseShortBig(pos + 4)) << 8) |
-                Integer.toUnsignedLong(bytes[pos + 6] & 0xFF);
+        return (Integer.toUnsignedLong(parseIntegerBig(pos)) << 24) | (Integer.toUnsignedLong(parseShortBig(pos + 4)) << 8) | Integer.toUnsignedLong(bytes[pos + 6] & 0xFF);
     }
 
-    // TODO: check for CHECKSUM
 
     /**
      * parse FIL Header
      */
-    public void parseFILHeader() {
+    protected void parseFILHeader() {
+        // TODO: check for CHECKSUM
         /* CHECKSUM FOR 4 BYTE */
         spaceId = parseIntegerBig(4);
         pageId = parseIntegerBig(8);
@@ -232,10 +238,4 @@ public class Page {
         IO.write(transactionId, this, 0, 32, newValue, false);
     }
 
-    /**
-     * Parse the page from {@code page.bytes}.
-     */
-    public void parse() {
-        parseFILHeader();
-    }
 }

@@ -61,18 +61,17 @@ public class ExtentManagePage extends Page {
 
     public ExtentEntry[] extentEntries = new ExtentEntry[256];
 
+    public ExtentManagePage(byte[] bytes) {
+        super(bytes);
+        parseExtentEntry();
+    }
 
-    public void parseExtentEntry() {
+
+    protected void parseExtentEntry() {
         for (int i = 0; i <= 255; i++) {
             extentEntries[i] = new ExtentEntry();
             extentEntries[i].parse(100 + i * 20);
         }
-    }
-
-    @Override
-    public void parse() {
-        parseFILHeader();
-        parseExtentEntry();
     }
 
     public void writeExtentManager(long transactionId) {
