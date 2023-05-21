@@ -250,19 +250,14 @@ public class Table {
       IndexPage rootPage =
           (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexRootPageIndex);
 
-      Pair<Boolean, IndexPage.RecordInPage> result =
-          rootPage.scanInternal(transactionId, recordToBeInserted.primaryKeyValues);
-      if (result.left) {
+      boolean result = rootPage.insertDataRecordIntoTree(transactionId, recordToBeInserted);
+      if (!result) {
         throw new Exception("The primary key value is already existed.");
       }
-      // TODO:
-      // depends on the result, we may move right or move down on the B-link tree.
-      // depends on the status of the page, we may split it.
-      rootPage.insertDataRecordInternal(transactionId, recordToBeInserted, result.right);
 
-      ArrayList<RecordLogical> records = rootPage.getAllRecordLogical(transactionId);
+      Pair<Integer, ArrayList<RecordLogical>> records = rootPage.getAllRecordLogical(transactionId);
       System.out.println("******************* values currently in rootPage:");
-      for (RecordLogical recordLogical : records) {
+      for (RecordLogical recordLogical : records.right) {
         System.out.println(recordLogical);
       }
       System.out.println("**************************************************");

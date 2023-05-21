@@ -26,11 +26,19 @@ public class Page {
   /** 8-byte LSN (reserved). */
   long LSN;
 
-  /** 4-byte previous(left) pageId, used in B-link-tree. */
-  int previousPageId;
+  /**
+   * 4-byte previous(left) pageId, used in B-link-tree.
+   *
+   * @deprecated
+   */
+  protected int previousPageId;
 
-  /** 4-byte next(right) pageId, used in B-link-tree. */
-  int nextPageId;
+  /**
+   * 4-byte next(right) pageId, used in B-link-tree.
+   *
+   * @deprecated
+   */
+  protected int nextPageId;
 
   /** the type of current page. OVERALL(0), EXTENT_MANAGE(1), INDEX_ROOT(2), DATA(3), */
   int pageType;

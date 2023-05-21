@@ -135,7 +135,8 @@ public class OverallPage extends ExtentManagePage {
 
       /* update currentAvailableExtentManager, on which the first element of availableExtents. */
       if (availableExtents.length > 0) {
-        currentAvailableExtentManager = (ExtentManagePage) IO.read(this.spaceId, nextPageId);
+        currentAvailableExtentManager =
+            (ExtentManagePage) IO.read(this.spaceId, availableExtents.nextPageId);
       } else {
         // TODO: more extents shall be added.
       }
