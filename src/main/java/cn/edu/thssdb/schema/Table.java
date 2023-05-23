@@ -2,6 +2,7 @@ package cn.edu.thssdb.schema;
 
 import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.runtime.ServerRuntime;
+import cn.edu.thssdb.storage.DiskBuffer;
 import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.storage.page.OverallPage;
 import cn.edu.thssdb.utils.Pair;

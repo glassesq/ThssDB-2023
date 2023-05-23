@@ -2,22 +2,34 @@ package cn.edu.thssdb.storage;
 
 import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.storage.page.*;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.github.benmanes.caffeine.cache.LoadingCache;
 
 import java.io.RandomAccessFile;
-import java.util.HashMap;
-import java.util.concurrent.locks.ReentrantLock;
 
 import static cn.edu.thssdb.storage.page.Page.*;
 
 public class DiskBuffer {
 
-  static ReentrantLock diskBufferLatch = new ReentrantLock();
-
   /**
    * map from {@code spID = spaceId[4byte]-pageID[4byte] } to a page class. !important: Buffer shall
    * be accessed with diskBufferLatch.
    */
-  private static final HashMap<Long, Page> buffer = new HashMap<>();
+  public static final LoadingCache<Long, Page> buffer =
+      Caffeine.newBuilder()
+          .softValues()
+          /*.evictionListener(
+          (Long key, Page page, RemovalCause cause) -> {
+              System.out.printf(
+                  "SpaceId %s Page %s was evicted (%s)%n",
+                  (int) (key >> 32), key.intValue(), cause))
+          } */
+          .build(
+              key -> {
+                int spaceId = (int) (key >> 32);
+                int pageId = key.intValue();
+                return input(spaceId, pageId);
+              });
 
   public static long concat(int spaceId, int pageId) {
     return (Integer.toUnsignedLong(spaceId) << 32) | pageId;
@@ -47,10 +59,7 @@ public class DiskBuffer {
    * @return hashmap value
    */
   public static Page getFromBuffer(long key) {
-    diskBufferLatch.lock();
-    Page page = buffer.get(key);
-    diskBufferLatch.unlock();
-    return page;
+    return buffer.get(key);
   }
 
   /**
@@ -60,9 +69,7 @@ public class DiskBuffer {
    * @param page page object
    */
   public static void putToBuffer(Page page) {
-    diskBufferLatch.lock();
     buffer.put(concat(page.spaceId, page.pageId), page);
-    diskBufferLatch.unlock();
   }
 
   /**
@@ -71,11 +78,13 @@ public class DiskBuffer {
    *
    * @param key hashmap key
    */
+  /*
   public static void removeFromBuffer(long key) {
     diskBufferLatch.lock();
     buffer.remove(key);
     diskBufferLatch.unlock();
   }
+   */
 
   /**
    * read a page from disk to buffer.
@@ -84,7 +93,7 @@ public class DiskBuffer {
    * @param pageId pageId
    * @throws Exception if the reading process fails.
    */
-  public static void input(int spaceId, int pageId) throws Exception {
+  public static Page input(int spaceId, int pageId) throws Exception {
     String tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
     RandomAccessFile tablespaceFile = new RandomAccessFile(tablespaceFilename, "r");
     byte[] pageBytes = new byte[(int) ServerRuntime.config.pageSize];
@@ -95,7 +104,6 @@ public class DiskBuffer {
     }
 
     int pageType = ((int) pageBytes[12] << 8) | pageBytes[13];
-    System.out.println("pageType" + pageType);
     Page page;
     switch (pageType) {
       case OVERALL_PAGE:
@@ -103,7 +111,6 @@ public class DiskBuffer {
         break;
       case INDEX_PAGE:
         page = new IndexPage(pageBytes);
-        System.out.println("here is a index page");
         break;
       case EXTENT_MANAGE_PAGE:
         page = new ExtentManagePage(pageBytes);
@@ -112,18 +119,10 @@ public class DiskBuffer {
         page = new DataPage(pageBytes);
       default:
         page = new Page(pageBytes);
-        System.out.println("here is a default page");
     }
-
-    /* Because {@code HashMap.get} and {@code HashMap.put} are not atomic, the {@code diskBufferLatch} is needed for concurrency access. */
-    diskBufferLatch.lock();
-    if (!buffer.containsKey(concat(spaceId, pageId))) {
-      buffer.put(concat(spaceId, pageId), page);
-    }
-    /* Because {@code HashMap.get} and {@code HashMap.put} are not atomic, the {@code diskBufferLatch} is needed for concurrency access. */
-    diskBufferLatch.unlock();
 
     tablespaceFile.close();
+    return page;
   }
 
   /**
@@ -147,7 +146,7 @@ public class DiskBuffer {
     tablespaceFile.close();
 
     // TODO: add condition, only discard page when necessary
-    removeFromBuffer(concat(spaceId, pageId));
+    //    removeFromBuffer(concat(spaceId, pageId));
 
     /* avoid writing and outputting page simultaneously */
     page.pageWriteAndOutputLatch.unlock();

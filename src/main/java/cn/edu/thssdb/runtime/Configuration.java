@@ -2,12 +2,12 @@ package cn.edu.thssdb.runtime;
 
 public class Configuration {
 
-  public final String testPath = "/Users/rongyi/Desktop";
+  public String testPath = "/Users/rongyi/Desktop";
 
-  public final String MetadataFilename = testPath + "/" + "example.json";
-  public final String WALFilename = testPath + "/" + "WAL.log";
+  public String MetadataFilename = testPath + "/" + "example.json";
+  public String WALFilename = testPath + "/" + "WAL.log";
 
-  public final int pageSize = 16 * 1024;
+  public int pageSize = 16 * 1024;
 
   public final int overallPageIndex = 0;
   public final int indexRootPageIndex = 2;

@@ -198,6 +198,7 @@ public class ServerRuntime {
         System.out.println(
             "database "
                 + databaseMetadata.get(k).databaseId
+              + " : "
                 + databaseMetadata.get(k).name
                 + " with "
                 + databaseMetadata.get(k).tables.size()

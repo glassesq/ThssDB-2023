@@ -560,7 +560,6 @@ public class IndexPage extends Page {
    */
   private void parseAllRecords() {
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
-    System.out.println(this.spaceId);
     int primaryKeyLength = metadata.getPrimaryKeyLength();
     int nonPrimaryKeyLength = metadata.getNonPrimaryKeyLength();
     int nullBitmapLength = metadata.getNullBitmapLengthInByte();
@@ -570,7 +569,6 @@ public class IndexPage extends Page {
     while (true) {
       record.parseDeeplyInPage(
           this, currentPos, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength, metadata);
-      System.out.println(record);
       if (currentPos == 52 + 10) {
         break;
       }
