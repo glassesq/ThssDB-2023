@@ -2,7 +2,7 @@ package cn.edu.thssdb.runtime;
 
 public class Configuration {
 
-  public String testPath = "/Users/rongyi/Desktop";
+  public String testPath = "D:\\项目\\tmp";
 
   public String MetadataFilename = testPath + "/" + "example.json";
   public String WALFilename = testPath + "/" + "WAL.log";

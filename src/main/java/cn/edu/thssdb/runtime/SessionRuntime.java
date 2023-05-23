@@ -2,10 +2,8 @@ package cn.edu.thssdb.runtime;
 
 import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.plan.LogicalPlan;
-import cn.edu.thssdb.plan.impl.CreateDatabasePlan;
-import cn.edu.thssdb.plan.impl.CreateTablePlan;
-import cn.edu.thssdb.plan.impl.InsertPlan;
-import cn.edu.thssdb.plan.impl.UseDatabasePlan;
+import cn.edu.thssdb.plan.impl.*;
+import cn.edu.thssdb.query.QueryResult;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import cn.edu.thssdb.schema.Database;
 import cn.edu.thssdb.schema.Table;
@@ -136,6 +134,17 @@ public class SessionRuntime {
           }
           response = new ExecuteStatementResp(StatusUtil.success("Insertion succeeded."), false);
           break;
+        case SELECT:
+          SelectPlan selectPlan = (SelectPlan) plan;
+          if (selectPlan.broken)
+            return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+          ArrayList<Table.TableMetadata> tables = new ArrayList<>();
+          for (String tableName : selectPlan.tableNames)
+            tables.add(currentDatabaseMetadata.getTableByName(tableName));
+          QueryResult result = selectPlan.getResult(tables);
+          response = new ExecuteStatementResp(StatusUtil.success("Select operation completed"), true);
+          // TODO result -> response
+          return response;
         default:
       }
 

@@ -19,10 +19,7 @@
 package cn.edu.thssdb.parser;
 
 import cn.edu.thssdb.plan.LogicalPlan;
-import cn.edu.thssdb.plan.impl.CreateDatabasePlan;
-import cn.edu.thssdb.plan.impl.CreateTablePlan;
-import cn.edu.thssdb.plan.impl.InsertPlan;
-import cn.edu.thssdb.plan.impl.UseDatabasePlan;
+import cn.edu.thssdb.plan.impl.*;
 import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.schema.Column;
 import cn.edu.thssdb.schema.Table;
@@ -111,5 +108,39 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
     return new InsertPlan(tableName, columnName, values);
   }
 
+  public LogicalPlan visitSelectStmt(SQLParser.SelectStmtContext ctx) {
+    // SELECT *
+    List<SQLParser.ResultColumnContext> columnNames = ctx.resultColumn();
+    ArrayList<SQLParser.ColumnFullNameContext> columns = new ArrayList<>();
+    for (SQLParser.ResultColumnContext columnFullName : columnNames)
+      columns.add(columnFullName.columnFullName()); // get full name
+
+    // FROM *
+    boolean useJoin = false;
+    SQLParser.TableQueryContext tableQuery = (SQLParser.TableQueryContext) ctx.tableQuery(0);
+    List<SQLParser.TableNameContext> tableQueryNames = tableQuery.tableName();
+    if (tableQueryNames.size() > 1) useJoin = true;
+
+    // JOIN *
+    ArrayList<String> tableNames = new ArrayList<>();
+    for (SQLParser.TableNameContext name : tableQueryNames)
+      tableNames.add(name.getText());
+
+    // ON *
+    boolean useOn = useJoin && tableQuery.K_ON() != null;
+    SQLParser.ConditionContext condition_on = useOn ? tableQuery.multipleCondition().condition() : null;
+
+    // WHERE *
+    boolean useWhere = ctx.K_WHERE() != null;
+    SQLParser.ConditionContext condition_where = useWhere ? ctx.multipleCondition().condition() : null;
+
+    if (useWhere) {
+      return useOn ? new SelectPlan(columns, tableNames, condition_on, condition_where)
+              : new SelectPlan(columns, tableNames, condition_where, useJoin);
+    } else {
+      return useOn ? new SelectPlan(columns, tableNames, condition_on)
+              : new SelectPlan(columns, tableNames);
+    }
+  }
   // TODO: parser to more logical plan
 }
