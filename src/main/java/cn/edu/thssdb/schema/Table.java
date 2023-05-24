@@ -77,6 +77,15 @@ public class Table {
       return count;
     }
 
+    public ArrayList<String> getPrimaryKeyList() {
+      // TODO: optimization
+      ArrayList<String> keys = new ArrayList<>();
+      for (Column columnDetail : columnDetails)
+        if (columnDetail.primary >= 0)
+          keys.add(columnDetail.toString());
+      return keys;
+    }
+
     public int getNonPrimaryKeyLength() {
       // TODO: optimization
       int count = 0;

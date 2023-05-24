@@ -141,7 +141,7 @@ public class SessionRuntime {
           ArrayList<Table.TableMetadata> tables = new ArrayList<>();
           for (String tableName : selectPlan.tableNames)
             tables.add(currentDatabaseMetadata.getTableByName(tableName));
-          QueryResult result = selectPlan.getResult(tables);
+          QueryResult result = selectPlan.getResult(transactionId, tables);
           response = new ExecuteStatementResp(StatusUtil.success("Select operation completed"), true);
           // TODO result -> response
           return response;
