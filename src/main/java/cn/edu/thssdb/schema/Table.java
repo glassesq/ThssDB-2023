@@ -256,8 +256,9 @@ public class Table {
         throw new Exception("The primary key value is already existed.");
       }
 
-      Pair<Integer, ArrayList<RecordLogical>> records = rootPage.getAllRecordLogical(transactionId);
+      Pair<Integer, ArrayList<RecordLogical>> records = rootPage.getLeftmostDataPage(transactionId);
       System.out.println("******************* values currently in rootPage:");
+      System.out.println("******************* next Page is:" + records.left);
       for (RecordLogical recordLogical : records.right) {
         System.out.println(recordLogical);
       }
