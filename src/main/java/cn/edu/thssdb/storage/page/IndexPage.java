@@ -554,6 +554,33 @@ public class IndexPage extends Page {
   }
 
   /**
+   * get leftmost leaf page (data page) of this tree.
+   * This method shall be only used by root page.
+   * @param transactionId transaction id
+   * @return if root is a leaf page, return (0, all records in root). Otherwise, return (leftmostDataPageId, empty array).
+   */
+  public Pair<Integer, ArrayList<RecordLogical>> getLeftmostDataPage(long transactionId) {
+    if (this.pageId != ServerRuntime.config.indexRootPageIndex) {
+      /* only root page can have access to this method. */
+      return null;
+    }
+    System.out.println("get leftmost data page.");
+    Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
+    RecordInPage record = infimumRecord.nextRecordInPage;
+    if (record.recordType == RecordInPage.USER_DATA_RECORD || record.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+      ArrayList<RecordLogical> recordList = new ArrayList<>();
+      while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+        recordList.add(new RecordLogical(record, metadata));
+        record = record.nextRecordInPage;
+      }
+      return new Pair<>(0, recordList);
+    } else if (record.recordType == RecordInPage.USER_POINTER_RECORD) {
+      return new Pair<>(ServerRuntime.config.indexLeftmostLeafIndex, new ArrayList<>());
+    }
+    return new Pair<>(-1, new ArrayList<>());
+  }
+
+  /**
    * Parse the system + user record part of this page using {@code page.bytes}. Save them into
    * this.records; <b> {@code this.spaceId} and its tableMetadata must be traceable in
    * ServerRuntime.</b> The method shall be only called once when inputting this page from disk.
@@ -823,11 +850,17 @@ public class IndexPage extends Page {
     RecordInPage oldSupremeRecord = getRecordInPageAndReturnSupreme(recordInPage);
     if (recordInPage.size() < 2) return false;
 
+    boolean firstSplit = infimumRecord.nextRecordInPage.recordType == RecordInPage.USER_DATA_RECORD;
+
     int leftPageId, rightPageId;
     try {
       OverallPage overallPage =
           (OverallPage) IO.read(this.spaceId, ServerRuntime.config.overallPageIndex);
-      leftPageId = overallPage.allocatePage(transactionId);
+      if( !firstSplit ) {
+        leftPageId = overallPage.allocatePage(transactionId);
+      } else {
+        leftPageId = ServerRuntime.config.indexLeftmostLeafIndex;
+      }
       rightPageId = overallPage.allocatePage(transactionId);
     } catch (Exception e) {
       return false;

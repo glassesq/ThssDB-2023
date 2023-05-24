@@ -44,7 +44,8 @@ public class OverallPage extends ExtentManagePage {
     overallPage.writeExtentManager(transactionId);
     overallPage.usePage(transactionId, 0);
     overallPage.usePage(transactionId, 1);
-    overallPage.usePage(transactionId, 2);
+    overallPage.usePage(transactionId, ServerRuntime.config.indexRootPageIndex);
+    overallPage.usePage(transactionId, ServerRuntime.config.indexLeftmostLeafIndex);
     return overallPage;
   }
 
