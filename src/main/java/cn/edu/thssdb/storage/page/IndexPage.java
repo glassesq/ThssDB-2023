@@ -554,10 +554,11 @@ public class IndexPage extends Page {
   }
 
   /**
-   * get leftmost leaf page (data page) of this tree.
-   * This method shall be only used by root page.
+   * get leftmost leaf page (data page) of this tree. This method shall be only used by root page.
+   *
    * @param transactionId transaction id
-   * @return if root is a leaf page, return (0, all records in root). Otherwise, return (leftmostDataPageId, empty array).
+   * @return if root is a leaf page, return (0, all records in root). Otherwise, return
+   *     (leftmostDataPageId, empty array).
    */
   public Pair<Integer, ArrayList<RecordLogical>> getLeftmostDataPage(long transactionId) {
     if (this.pageId != ServerRuntime.config.indexRootPageIndex) {
@@ -567,7 +568,8 @@ public class IndexPage extends Page {
     System.out.println("get leftmost data page.");
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
     RecordInPage record = infimumRecord.nextRecordInPage;
-    if (record.recordType == RecordInPage.USER_DATA_RECORD || record.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+    if (record.recordType == RecordInPage.USER_DATA_RECORD
+        || record.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
       ArrayList<RecordLogical> recordList = new ArrayList<>();
       while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
         recordList.add(new RecordLogical(record, metadata));
@@ -856,7 +858,7 @@ public class IndexPage extends Page {
     try {
       OverallPage overallPage =
           (OverallPage) IO.read(this.spaceId, ServerRuntime.config.overallPageIndex);
-      if( !firstSplit ) {
+      if (!firstSplit) {
         leftPageId = overallPage.allocatePage(transactionId);
       } else {
         leftPageId = ServerRuntime.config.indexLeftmostLeafIndex;
@@ -1133,6 +1135,56 @@ public class IndexPage extends Page {
       }
     } while (true);
     return true;
+  }
+
+  /**
+   * scan tree for search key
+   *
+   * @param transactionId transaction id
+   * @param searchKey search key
+   * @return (true, RecordInPage with proper search key) if found. Otherwise, return (false, largest
+   *     RecordInPage less than searchKey). It returns the maximum record that is not larger than
+   *     the search key. In particular, if the largest record in the tree is not larger than the
+   *     search key, that largest record will be returned.
+   * @throws Exception IO error
+   */
+  public Pair<Boolean, RecordInPage> scanTreeAndReturnRecord(
+      long transactionId, ValueWrapper[] searchKey) throws Exception {
+    Pair<Boolean, RecordInPage> result;
+    IndexPage currentPage = this;
+    do {
+      result = currentPage.scanInternal(transactionId, searchKey);
+      if (result.right.recordType == RecordInPage.USER_POINTER_RECORD) {
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.childPageId);
+      } else if (result.right.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.nextAbsoluteOffset);
+      } else break;
+    } while (true);
+    // TODO: check if deleted
+    return result;
+  }
+  /**
+   * scan tree for search key and return page
+   *
+   * @param transactionId transaction id
+   * @param searchKey search key
+   * @return see as scanTreeAndReturnRecord. The nextPageId and record lists are returned.
+   * @throws Exception IO error
+   */
+  public Pair<Integer, ArrayList<RecordLogical>> scanTreeAndReturnPage(
+      long transactionId, ValueWrapper[] searchKey) throws Exception {
+    Pair<Boolean, RecordInPage> result;
+    IndexPage currentPage = this;
+    do {
+      result = currentPage.scanInternal(transactionId, searchKey);
+      if (result.right.recordType == RecordInPage.USER_POINTER_RECORD) {
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.childPageId);
+      } else if (result.right.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.nextAbsoluteOffset);
+      } else break;
+    } while (true);
+    // TODO: check if deleted
+    return currentPage.getAllRecordLogical(transactionId);
   }
 
   /**
