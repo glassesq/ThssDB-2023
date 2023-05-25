@@ -14,16 +14,13 @@ public class RecordLogical {
   public RecordLogical(IndexPage.RecordInPage record, Table.TableMetadata metadata) {
     primaryKeyValues = new ValueWrapper[metadata.getPrimaryKeyNumber()];
     nonPrimaryKeyValues = new ValueWrapper[metadata.getNonPrimaryKeyNumber()];
-    int npIndex = 0;
-    for (int i = 0; i < metadata.columnDetails.size(); i++) {
-      Column column = metadata.columnDetails.get(i);
-      if (column.primary >= 0) {
-        primaryKeyValues[column.primary] =
-            new ValueWrapper(record.primaryKeyValues[column.primary]);
-      } else {
-        nonPrimaryKeyValues[npIndex] = new ValueWrapper(record.nonPrimaryKeyValues[npIndex]);
-        ++npIndex;
-      }
+    int primaryKeyNumber = metadata.getPrimaryKeyNumber();
+    int nonPrimaryKeyNumber = metadata.getNonPrimaryKeyNumber();
+    for (int i = 0; i < primaryKeyNumber; i++) {
+      primaryKeyValues[i] = new ValueWrapper(record.primaryKeyValues[i]);
+    }
+    for (int i = 0; i < nonPrimaryKeyNumber; i++) {
+      nonPrimaryKeyValues[i] = new ValueWrapper(record.nonPrimaryKeyValues[i]);
     }
   }
 

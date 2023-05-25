@@ -54,6 +54,10 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
     Table.TableMetadata tableMetadata = new Table.TableMetadata();
     tableMetadata.prepare(ctx.tableName().getText(), ServerRuntime.newTablespace());
 
+    ArrayList<Column> columns = new ArrayList<>();
+    ArrayList<String> names = new ArrayList<>();
+    ArrayList<Integer> creatingOrder = new ArrayList<>();
+
     for (SQLParser.ColumnDefContext columnContext : ctx.columnDef()) {
       String name = columnContext.columnName().getText();
       String strType = columnContext.typeName().getText();
@@ -68,17 +72,26 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
       for (SQLParser.ColumnConstraintContext constraintContext : columnContext.columnConstraint()) {
         column.setConstraint(constraintContext.getText());
       }
-      tableMetadata.addColumn(name, column);
+      columns.add(column);
+      names.add(name);
     }
 
     int order = 0;
     for (SQLParser.ColumnNameContext columnNameContext : ctx.tableConstraint().columnName()) {
-      tableMetadata
-          .columnDetails
-          .get(tableMetadata.columns.get(columnNameContext.getText()))
-          .setPrimaryKey(order);
+      tableMetadata.getColumnDetailByName(columnNameContext.getText()).setPrimaryKey(order);
       ++order;
     }
+
+    int nonPrimaryOrder = 0;
+    for (Column column : columns) {
+      if (column.primary < 0) {
+        column.setPrimaryKey(-1 - nonPrimaryOrder);
+        nonPrimaryOrder++;
+      }
+      creatingOrder.add(column.primary);
+    }
+
+    tableMetadata.setColumnsAndCompute(names, columns, creatingOrder, order, nonPrimaryOrder);
 
     return new CreateTablePlan(tableMetadata);
   }
@@ -123,18 +136,20 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
 
     // JOIN *
     ArrayList<String> tableNames = new ArrayList<>();
-    for (SQLParser.TableNameContext name : tableQueryNames)
-      tableNames.add(name.getText());
+    for (SQLParser.TableNameContext name : tableQueryNames) tableNames.add(name.getText());
 
     // ON *
     boolean useOn = useJoin && tableQuery.K_ON() != null;
-    SQLParser.ConditionContext condition_on = useOn ? tableQuery.multipleCondition().condition() : null;
+    SQLParser.ConditionContext condition_on =
+        useOn ? tableQuery.multipleCondition().condition() : null;
 
     // WHERE *
     boolean useWhere = ctx.K_WHERE() != null;
-    SQLParser.ConditionContext condition_where = useWhere ? ctx.multipleCondition().condition() : null;
+    SQLParser.ConditionContext condition_where =
+        useWhere ? ctx.multipleCondition().condition() : null;
 
-    return new SelectPlan(columns, tableNames, condition_on, condition_where, useJoin, useOn, useWhere);
+    return new SelectPlan(
+        columns, tableNames, condition_on, condition_where, useJoin, useOn, useWhere);
   }
   // TODO: parser to more logical plan
 }

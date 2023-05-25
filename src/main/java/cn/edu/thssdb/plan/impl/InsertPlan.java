@@ -10,8 +10,11 @@ public class InsertPlan extends LogicalPlan {
 
   public boolean broken = false;
 
+  private int valueSize;
+  private int columnSize;
+
   public String tableName;
-  public ArrayList<String> columnName = null;
+  public ArrayList<String> columnNamesToBeInserted = null;
   public ArrayList<ArrayList<String>> values;
 
   public InsertPlan(String tableName, boolean broken) {
@@ -25,7 +28,17 @@ public class InsertPlan extends LogicalPlan {
     super(LogicalPlanType.INSERT);
     this.tableName = tableName;
     this.values = values;
-    this.columnName = columnName;
+    this.columnNamesToBeInserted = columnName;
+    this.columnSize = this.columnNamesToBeInserted.size();
+    this.valueSize = -1;
+    for (ArrayList<String> valueToBeInserted : values) {
+      if (valueSize == -1) {
+        valueSize = valueToBeInserted.size();
+      } else if (valueSize != valueToBeInserted.size()) {
+        this.broken = true;
+      }
+    }
+    if (this.valueSize != this.columnSize) this.broken = true;
   }
 
   /**
@@ -36,20 +49,39 @@ public class InsertPlan extends LogicalPlan {
    */
   public ArrayList<ArrayList<String>> getValues(Table.TableMetadata metadata) {
     ArrayList<ArrayList<String>> results = new ArrayList<>();
-    HashMap<Integer, Integer> setValue = new HashMap<>();
-    for (int i = 0; i < columnName.size(); i++) {
-      setValue.put(metadata.columns.get(columnName.get(i)), i);
-    }
-    for (ArrayList<String> value : values) {
-      ArrayList<String> result = new ArrayList<>();
-      for (int cnt = 0; cnt < metadata.columnDetails.size(); cnt++) {
-        Integer index = setValue.get(cnt);
-        if (index != null) result.add(value.get(index));
-        else if (columnName.size() == 0) {
-          if (cnt < value.size()) result.add(value.get(cnt));
-          else result.add("null");
-        } else result.add("null");
+
+    HashMap<Integer, Integer> columnPrimaryFields = new HashMap<>();
+    if (this.columnSize == 0) {
+      for (int i = 0; i < this.valueSize; i++) {
+        columnPrimaryFields.put(metadata.getPrimaryFieldByCreatingOrder(i), i);
       }
+    } else {
+      for (int i = 0; i < this.columnSize; i++) {
+        columnPrimaryFields.put(
+            metadata.getColumnDetailByName(columnNamesToBeInserted.get(i)).primary, i);
+      }
+    }
+
+    for (ArrayList<String> valueToBeInserted : values) {
+      int primaryKeyNumber = metadata.getPrimaryKeyNumber();
+      int nonPrimaryKeyNumber = metadata.getNonPrimaryKeyNumber();
+
+      ArrayList<String> result = new ArrayList<>();
+
+      for (int i = 0; i < primaryKeyNumber; i++) {
+        Integer index = columnPrimaryFields.get(i);
+        if (index != null) result.add(valueToBeInserted.get(index));
+        else result.add("null");
+      }
+
+      for (int i = -1; i >= nonPrimaryKeyNumber; i--) {
+        Integer index = columnPrimaryFields.get(i);
+        if (index != null) result.add(valueToBeInserted.get(index));
+        else result.add("null");
+      }
+
+      // TODO: check for NOT NULL constraint
+
       results.add(result);
     }
     return results;

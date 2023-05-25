@@ -10,11 +10,9 @@ import cn.edu.thssdb.schema.Table;
 import cn.edu.thssdb.schema.ValueWrapper;
 import cn.edu.thssdb.sql.SQLParser;
 import cn.edu.thssdb.storage.page.IndexPage;
-import cn.edu.thssdb.storage.page.Page;
 import cn.edu.thssdb.utils.Pair;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 
 import static java.lang.Math.max;
 
@@ -49,17 +47,17 @@ public class SelectPlan extends LogicalPlan {
       if (useOn) {
         if (t.name.equals(L_on.tableName().getText())) {
           String keyName = L_on.columnName().getText();
-          if (t.columns.get(keyName) == null)
+          if (t.columnNames.get(keyName) == null)
             throw new IllegalArgumentException("Column '" + keyName + "' not found in table '" + t.name +"'");
           L_index = i;
-          L_queryCol = t.columnDetails.get(t.columns.get(keyName));
+          L_queryCol = t.columnDetails.get(t.columnNames.get(keyName));
         }
         if (t.name.equals(R_on.tableName().getText())) {
           String keyName = R_on.columnName().getText();
-          if (t.columns.get(keyName) == null)
+          if (t.columnNames.get(keyName) == null)
             throw new IllegalArgumentException("Column '" + keyName + "' not found in table '" + t.name +"'");
           R_index = i;
-          R_queryCol = t.columnDetails.get(t.columns.get(keyName));
+          R_queryCol = t.columnDetails.get(t.columnNames.get(keyName));
         }
       }
       ++i;
@@ -69,10 +67,10 @@ public class SelectPlan extends LogicalPlan {
     String keyName = L_where.columnName().getText();
     if (table == null)
       throw new IllegalArgumentException("Table " + L_where.tableName().getText() + " not found in FROM clause.");
-    if (table.columns.get(keyName) == null)
+    if (table.columnNames.get(keyName) == null)
       throw new IllegalArgumentException("Column '" + keyName + "' not found in table '" + table.name +"'");
 
-    queryCol = table.columnDetails.get(table.columns.get(keyName));
+    queryCol = table.columnDetails.get(table.columnNames.get(keyName));
     queryValue = new ValueWrapper(queryCol);
     queryValue.setWithNull(R_where.getText());
   }
@@ -80,7 +78,7 @@ public class SelectPlan extends LogicalPlan {
   public ArrayList<String> applyProjection(RecordLogical record, Table.TableMetadata table) {
     ArrayList<String> result = new ArrayList<>();
     for (SQLParser.ColumnFullNameContext column : columns) {
-      Column col = table.columnDetails.get(table.columns.get(column.columnName().getText()));
+      Column col = table.columnDetails.get(table.columnNames.get(column.columnName().getText()));
       if (col.primary >= 0) result.add(record.primaryKeyValues[col.primary].toString());
       else result.add(record.nonPrimaryKeyValues[-col.primary-1].toString());
     }
@@ -216,7 +214,7 @@ public class SelectPlan extends LogicalPlan {
         for (Pair<Table.TableMetadata, RecordLogical> record: records) {
           Table.TableMetadata table = record.left;
           if (table.name.equals(column.tableName().getText())) {
-            Column col = table.columnDetails.get(table.columns.get(column.columnName().getText()));
+            Column col = table.columnDetails.get(table.columnNames.get(column.columnName().getText()));
             if (col.primary >= 0) result.add(record.right.primaryKeyValues[col.primary].toString());
             else result.add(record.right.nonPrimaryKeyValues[-col.primary - 1].toString());
           }

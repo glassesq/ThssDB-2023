@@ -173,7 +173,10 @@ public class IndexPage extends Page {
       this.numberRecordOwnedInDirectory = (byte) (page.bytes[pos - 4] & 0x0F);
       this.recordType = page.bytes[pos - 3];
       this.nextAbsoluteOffset = page.parseShortBig(pos - 2);
+      int primaryKeyNumber = metadata.getPrimaryKeyNumber();
+      int nonPrimaryKeyNumber = metadata.getNonPrimaryKeyNumber();
       ArrayList<Integer> primaryOffsetList;
+      ArrayList<Integer> nonPrimaryOffsetList;
       /* base point */
       switch (this.recordType) {
         case (SYSTEM_SUPREME_RECORD):
@@ -205,19 +208,13 @@ public class IndexPage extends Page {
           this.nonPrimaryKeyValues = new ValueWrapper[0];
 
           primaryOffsetList = metadata.getPrimaryOffsetInOrder();
-          for (int i = 0; i < metadata.columnDetails.size(); i++) {
-            Column column = metadata.columnDetails.get(i);
-            byte[] newValue = new byte[column.getLength()];
-            if (column.primary >= 0) {
-              System.arraycopy(
-                  primaryKeys,
-                  primaryOffsetList.get(column.primary),
-                  newValue,
-                  0,
-                  column.getLength());
-              primaryKeyValues[column.primary] =
-                  (new ValueWrapper(newValue, column.type, column.getLength(), column.offPage));
-            }
+          primaryKeyNumber = metadata.getPrimaryKeyNumber();
+          for (int i = 0; i < primaryKeyNumber; i++) {
+            Column column = metadata.getColumnDetailByPrimaryField(i);
+            int length = column.getLength();
+            byte[] newValue = new byte[length];
+            System.arraycopy(primaryKeys, primaryOffsetList.get(i), newValue, 0, length);
+            primaryKeyValues[i] = new ValueWrapper(newValue, column.type, length, column.offPage);
           }
 
           this.childPageId = page.parseIntegerBig(pos + primaryKeyLength);
@@ -244,28 +241,24 @@ public class IndexPage extends Page {
           this.nonPrimaryKeyValues = new ValueWrapper[metadata.getNonPrimaryKeyNumber()];
 
           primaryOffsetList = metadata.getPrimaryOffsetInOrder();
-          int nonPrimaryOffset = 0;
-          int npIndex = 0;
-          for (int i = 0; i < metadata.columnDetails.size(); i++) {
-            Column column = metadata.columnDetails.get(i);
-            byte[] newValue = new byte[column.getLength()];
-            if (column.primary >= 0) {
-              System.arraycopy(
-                  primaryKeys,
-                  primaryOffsetList.get(column.primary),
-                  newValue,
-                  0,
-                  column.getLength());
-              primaryKeyValues[column.primary] =
-                  (new ValueWrapper(newValue, column.type, column.getLength(), column.offPage));
-            } else {
-              System.arraycopy(nonPrimaryKeys, nonPrimaryOffset, newValue, 0, column.getLength());
-              nonPrimaryKeyValues[npIndex] =
-                  (new ValueWrapper(newValue, column.type, column.getLength(), column.offPage));
-              ++npIndex;
-              nonPrimaryOffset += column.getLength();
-            }
+          for (int i = 0; i < primaryKeyNumber; i++) {
+            Column column = metadata.getColumnDetailByOrderInType(i, true);
+            int length = column.getLength();
+            byte[] newValue = new byte[length];
+            System.arraycopy(primaryKeys, primaryOffsetList.get(i), newValue, 0, length);
+            primaryKeyValues[i] = new ValueWrapper(newValue, column.type, length, column.offPage);
           }
+
+          nonPrimaryOffsetList = metadata.getNonPrimaryKeyOffsetInOrder();
+          for (int i = 0; i < nonPrimaryKeyNumber; i++) {
+            Column column = metadata.getColumnDetailByOrderInType(i, false);
+            int length = column.getLength();
+            byte[] newValue = new byte[length];
+            System.arraycopy(nonPrimaryKeys, nonPrimaryOffsetList.get(i), newValue, 0, length);
+            nonPrimaryKeyValues[i] =
+                new ValueWrapper(newValue, column.type, length, column.offPage);
+          }
+
           break;
       }
     }
@@ -680,34 +673,31 @@ public class IndexPage extends Page {
     record.primaryKeyValues = new ValueWrapper[recordToBeInserted.primaryKeyValues.length];
     record.nonPrimaryKeyValues = new ValueWrapper[recordToBeInserted.nonPrimaryKeyValues.length];
 
-    int nonPrimaryOffset = 0;
+    int primaryKeyNumber = metadata.getPrimaryKeyNumber();
+    int nonPrimaryKeyNumber = metadata.getNonPrimaryKeyNumber();
     ArrayList<Integer> primaryOffsetList = metadata.getPrimaryOffsetInOrder();
+    ArrayList<Integer> nonPrimaryKeyOffsetList = metadata.getNonPrimaryKeyOffsetInOrder();
 
-    int npIndex = 0;
-    for (int i = 0; i < metadata.columnDetails.size(); i++) {
-      Column column = metadata.columnDetails.get(i);
-      if (column.primary >= 0) {
-        record.primaryKeyValues[column.primary] =
-            new ValueWrapper(recordToBeInserted.primaryKeyValues[column.primary]);
-        System.arraycopy(
-            recordToBeInserted.primaryKeyValues[column.primary].bytes,
-            0,
-            record.primaryKeys,
-            primaryOffsetList.get(column.primary),
-            column.getLength());
-      } else {
-        record.nonPrimaryKeyValues[npIndex] =
-            new ValueWrapper(recordToBeInserted.nonPrimaryKeyValues[npIndex]);
-        System.arraycopy(
-            recordToBeInserted.nonPrimaryKeyValues[npIndex].bytes,
-            0,
-            record.nonPrimaryKeys,
-            nonPrimaryOffset,
-            column.getLength());
-        nonPrimaryOffset += column.getLength();
-        ++npIndex;
-      }
+    for (int i = 0; i < primaryKeyNumber; i++) {
+      record.primaryKeyValues[i] = new ValueWrapper(recordToBeInserted.primaryKeyValues[i]);
+      System.arraycopy(
+          recordToBeInserted.primaryKeyValues[i].bytes,
+          0,
+          record.primaryKeys,
+          primaryOffsetList.get(i),
+          recordToBeInserted.primaryKeyValues[i].bytes.length);
     }
+
+    for (int i = 0; i < nonPrimaryKeyNumber; i++) {
+      record.nonPrimaryKeyValues[i] = new ValueWrapper(recordToBeInserted.nonPrimaryKeyValues[i]);
+      System.arraycopy(
+          recordToBeInserted.nonPrimaryKeyValues[i].bytes,
+          0,
+          record.nonPrimaryKeys,
+          nonPrimaryKeyOffsetList.get(i),
+          recordToBeInserted.nonPrimaryKeyValues[i].bytes.length);
+    }
+
     return record;
   }
 

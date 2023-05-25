@@ -2,7 +2,6 @@ package cn.edu.thssdb.schema;
 
 import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.runtime.ServerRuntime;
-import cn.edu.thssdb.storage.DiskBuffer;
 import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.storage.page.OverallPage;
 import cn.edu.thssdb.utils.Pair;
@@ -36,65 +35,104 @@ public class Table {
     /** if the table is inited (The relevant tablespace file is already in disk buffer or disk.) */
     public boolean inited = false;
     /** ColumnName to column index */
-    public HashMap<String, Integer> columns = new HashMap<>();
+    public HashMap<String, Integer> columnNames = new HashMap<>();
+
     /** column index to column object (detail) */
+    // TODO: change to private
     public ArrayList<Column> columnDetails = new ArrayList<>();
+
+    public ArrayList<Integer> columnCreatingOrder = new ArrayList<>();
+
     /** Json object of overall table metadata */
     public JSONObject object;
+
     /** Json arrays of column object */
     public JSONArray columnObjectArray;
 
-    public int getPrimaryKeyNumber() {
-      // TODO: optimization
-      int count = 0;
-      for (Column columnDetail : columnDetails) {
-        if (columnDetail.primary >= 0) {
-          count++;
-        }
+    private int nonPrimaryKeyNumber = 0;
+
+    private int nonPrimaryKeyLength = 0;
+
+    private final ArrayList<Integer> nonPrimaryKeyOffset = new ArrayList<>();
+    private int primaryKeyNumber = 0;
+    private int primaryKeyLength = 0;
+    private final ArrayList<Integer> primaryKeyOffset = new ArrayList<>();
+
+    private int nullableKeyNumber = 0;
+
+    public int getColumnNumber() {
+      return nonPrimaryKeyNumber + primaryKeyNumber;
+    }
+
+    public int getPrimaryFieldByCreatingOrder(int creatingOrder) {
+      return columnCreatingOrder.get(creatingOrder);
+    }
+
+    public Column getColumnDetailByOrderInType(int order, boolean primaryField) {
+      if (primaryField) return getColumnDetailByPrimaryField(order);
+      else return getColumnDetailByPrimaryField(-1 - order);
+    }
+
+    public Column getColumnDetailByPrimaryField(int primaryField) {
+      return columnDetails.get(nonPrimaryKeyNumber + primaryField);
+    }
+
+    public Column getColumnDetailByName(String name) {
+      return getColumnDetailByPrimaryField(columnNames.get(name));
+    }
+
+    public void setColumnsAndCompute(
+        ArrayList<String> _names,
+        ArrayList<Column> _columns,
+        ArrayList<Integer> _columnOrder,
+        int primaryKeyNumber,
+        int nonPrimaryKeyNumber) {
+      this.primaryKeyNumber = primaryKeyNumber;
+      this.nonPrimaryKeyNumber = nonPrimaryKeyNumber;
+      this.nullableKeyNumber = nonPrimaryKeyNumber; /* TODO */
+      for (int i = 0; i < _names.size(); i++) {
+        Column column = _columns.get(i);
+        columnDetails.set(nonPrimaryKeyNumber + column.primary, column);
+        columnNames.put(_names.get(i), column.primary);
       }
-      return count;
+      this.primaryKeyLength = 0;
+      for (int i = 0; i < primaryKeyNumber; i++) {
+        primaryKeyOffset.add(primaryKeyLength);
+        primaryKeyLength += getColumnDetailByPrimaryField(i).getLength();
+      }
+      this.nonPrimaryKeyLength = 0;
+      for (int i = -1; i >= -nonPrimaryKeyNumber; i--) {
+        nonPrimaryKeyOffset.add(nonPrimaryKeyLength);
+        nonPrimaryKeyLength += getColumnDetailByPrimaryField(i).getLength();
+      }
+      this.columnCreatingOrder = _columnOrder;
+      for (Integer index : this.columnCreatingOrder) {
+        columnObjectArray.put(columnDetails.get(index).object);
+      }
+    }
+
+    public int getPrimaryKeyNumber() {
+      return primaryKeyNumber;
     }
 
     public int getNonPrimaryKeyNumber() {
-      // TODO: optimization
-      int count = 0;
-      for (Column columnDetail : columnDetails) {
-        if (columnDetail.primary < 0) {
-          count++;
-        }
-      }
-      return count;
+      return nonPrimaryKeyNumber;
     }
 
     public int getPrimaryKeyLength() {
-      // TODO: optimization
-      int count = 0;
-      for (Column columnDetail : columnDetails) {
-        if (columnDetail.primary >= 0) {
-          count += columnDetail.getLength();
-        }
-      }
-      return count;
+      return primaryKeyLength;
     }
 
     public ArrayList<String> getPrimaryKeyList() {
       // TODO: optimization
       ArrayList<String> keys = new ArrayList<>();
       for (Column columnDetail : columnDetails)
-        if (columnDetail.primary >= 0)
-          keys.add(columnDetail.toString());
+        if (columnDetail.primary >= 0) keys.add(columnDetail.toString());
       return keys;
     }
 
     public int getNonPrimaryKeyLength() {
-      // TODO: optimization
-      int count = 0;
-      for (Column columnDetail : columnDetails) {
-        if (columnDetail.primary < 0) {
-          count += columnDetail.getLength();
-        }
-      }
-      return count;
+      return nonPrimaryKeyLength;
     }
 
     /**
@@ -104,15 +142,8 @@ public class Table {
      */
     public int getNullBitmapLengthInByte() {
       // TODO: optimization
-      int count = 0;
-      for (Column columnDetail : columnDetails) {
-        if (!columnDetail.notNull) {
-          count++;
-        }
-      }
-
       /* ceil */
-      return ((count + 7) / 8);
+      return ((nullableKeyNumber + 7) / 8);
     }
 
     /**
@@ -136,25 +167,21 @@ public class Table {
     }
 
     /**
-     * get offset of each primaryKey TODO: optimization
+     * get offset of each primaryKey (0, 1, ...., n)
      *
      * @return ArrayList<Integer> the offset of {@code ith} primaryKey
      */
     public ArrayList<Integer> getPrimaryOffsetInOrder() {
-      HashMap<Integer, Column> primaryKeyColumn = new HashMap<>();
-      ArrayList<Integer> offsetList = new ArrayList<>();
-      for (Column column : columnDetails) {
-        if (column.primary >= 0) {
-          primaryKeyColumn.put(column.primary, column);
-        }
-      }
-      int pOffset = 0;
-      for (int i = 0; i < primaryKeyColumn.size(); i++) {
-        Column column = primaryKeyColumn.get(i);
-        offsetList.add(pOffset);
-        pOffset += column.getLength();
-      }
-      return offsetList;
+      return primaryKeyOffset;
+    }
+
+    /**
+     * get offset of non primary key (-1, ...., -m)
+     *
+     * @return ArrayList<Integer> the offset of {@code ith} nonPrimaryKey
+     */
+    public ArrayList<Integer> getNonPrimaryKeyOffsetInOrder() {
+      return nonPrimaryKeyOffset;
     }
 
     /**
@@ -190,7 +217,7 @@ public class Table {
       for (int i = 0; i < metadata.columnObjectArray.length(); i++) {
         Column column = Column.parse(metadata.columnObjectArray.getJSONObject(i));
         String name = metadata.columnObjectArray.getJSONObject(i).getString("columnName");
-        metadata.columns.put(name, i);
+        metadata.columnNames.put(name, i);
         metadata.columnDetails.add(column);
       }
 
@@ -226,7 +253,7 @@ public class Table {
 
     public void addColumn(String name, Column column) {
       int size = columnDetails.size();
-      this.columns.put(name, size);
+      this.columnNames.put(name, size);
       this.columnDetails.add(column);
       columnObjectArray.put(column.object);
     }
@@ -240,18 +267,20 @@ public class Table {
      */
     public void insertRecord(long transactionId, ArrayList<String> values) throws Exception {
       RecordLogical recordToBeInserted = new RecordLogical(this);
-      int index = 0;
-      int npIndex = 0;
-      for (Column column : columnDetails) {
-        ValueWrapper valueWrapper = new ValueWrapper(column);
-        valueWrapper.setWithNull(values.get(index));
-        ++index;
-        if (column.primary >= 0) {
-          recordToBeInserted.primaryKeyValues[column.primary] = valueWrapper;
-        } else {
-          recordToBeInserted.nonPrimaryKeyValues[npIndex] = valueWrapper;
-          ++npIndex;
-        }
+
+      int primaryKeyNumber = getPrimaryKeyNumber();
+      int nonPrimaryKeyNumber = getNonPrimaryKeyNumber();
+
+      for (int i = 0; i < primaryKeyNumber; i++) {
+        ValueWrapper valueWrapper = new ValueWrapper(getColumnDetailByOrderInType(i, true));
+        valueWrapper.setWithNull(values.get(i));
+        recordToBeInserted.primaryKeyValues[i] = valueWrapper;
+      }
+
+      for (int i = 0; i < nonPrimaryKeyNumber; i++) {
+        ValueWrapper valueWrapper = new ValueWrapper(getColumnDetailByOrderInType(i, false));
+        valueWrapper.setWithNull(values.get(i));
+        recordToBeInserted.nonPrimaryKeyValues[i] = valueWrapper;
       }
 
       // TODO: validation (check for constraint)
