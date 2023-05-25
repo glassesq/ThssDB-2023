@@ -35,6 +35,7 @@ public class ValueWrapperTest {
     assertNotNull(currentDatabase);
     System.out.println("START TEST : metadata info setup");
   }
+
   @After
   public void cleanup() {
     System.out.println("\n ##### END TEST");

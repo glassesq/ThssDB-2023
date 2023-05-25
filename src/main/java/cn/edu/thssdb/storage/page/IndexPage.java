@@ -401,13 +401,9 @@ public class IndexPage extends Page {
     }
   }
 
-  /**
-   * @deprecated
-   */
+  /** @deprecated */
   public int pageLevel = 0;
-  /**
-   * @deprecated
-   */
+  /** @deprecated */
   public int numberDirectory = 0;
 
   public int freespaceStart = 64;

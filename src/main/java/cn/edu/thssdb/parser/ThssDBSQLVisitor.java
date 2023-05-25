@@ -158,17 +158,15 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
     for (SQLParser.TableNameContext name : tableQueryNames) tableNames.add(name.getText());
 
     // ON *
-    boolean useOn = useJoin && tableQuery.K_ON() != null;
     SQLParser.ConditionContext condition_on =
-        useOn ? tableQuery.multipleCondition().condition() : null;
+        useJoin ? tableQuery.multipleCondition().condition() : null;
 
     // WHERE *
     boolean useWhere = ctx.K_WHERE() != null;
     SQLParser.ConditionContext condition_where =
         useWhere ? ctx.multipleCondition().condition() : null;
 
-    return new SelectPlan(
-        columns, tableNames, condition_on, condition_where, useJoin, useOn, useWhere);
+    return new SelectPlan(columns, tableNames, condition_on, condition_where, useJoin, useWhere);
   }
   // TODO: parser to more logical plan
 }
