@@ -1,6 +1,5 @@
 package cn.edu.thssdb.schema;
 
-import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.type.DataType;
 
 import java.nio.charset.StandardCharsets;
@@ -67,11 +66,13 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
     } else {
       if (str.startsWith("'") && str.endsWith("'")) {
         StringBuilder builder = new StringBuilder(str.substring(1, str.length() - 1));
+        /*
         int add = (bytes.length / ServerRuntime.config.maxCharsetLength) - (str.length() - 2);
         System.out.println(bytes.length);
         System.out.println("add:" + add);
         for (int i = 0; i < add; i++) builder.append(" ");
         set(builder.toString());
+        */
       } else {
         set(str);
       }

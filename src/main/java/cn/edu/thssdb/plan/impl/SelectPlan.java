@@ -11,7 +11,6 @@ import cn.edu.thssdb.schema.ValueWrapper;
 import cn.edu.thssdb.sql.SQLParser;
 import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.utils.Pair;
-import org.stringtemplate.v4.AutoIndentWriter;
 
 import java.util.ArrayList;
 
@@ -39,10 +38,11 @@ public class SelectPlan extends LogicalPlan {
     System.out.println("initailization start");
     res = new QueryResult();
     colInTable = new ArrayList<>();
+    System.out.println(columns.size());
     for (SQLParser.ColumnFullNameContext column : columns) {
       res.columns.add(column.getText());
-      System.out.println(tables.get(0).name);
-      for (Table.TableMetadata table : tables)
+      for (Table.TableMetadata table : tables) {
+        System.out.println(table.name);
         if (tables.size() == 1 || table.name.equals(column.tableName().getText())) {
           String keyName = column.columnName().getText();
           System.out.println(column.getText());
@@ -53,6 +53,7 @@ public class SelectPlan extends LogicalPlan {
           System.out.println(table.getColumnDetailByName(keyName).toString());
           break;
         }
+      }
     }
     System.out.println("init-1");
     Table.TableMetadata table = !useJoin ? tables.get(0) : null;
@@ -101,9 +102,7 @@ public class SelectPlan extends LogicalPlan {
     for (int i = 0; i < columns.size(); ++i) {
       int col = colInTable.get(i).primary;
       if (col >= 0) result.add(record.primaryKeyValues[col].toString());
-      else result.add(record.nonPrimaryKeyValues[-col-1].toString());
-      System.out.println(colInTable.get(i).toString());
-      System.out.println(result.get(i));
+      else result.add(record.nonPrimaryKeyValues[-col - 1].toString());
     }
     System.out.println("+++Proj+++");
     return result;
@@ -302,8 +301,6 @@ public class SelectPlan extends LogicalPlan {
     this.transactionId = transactionId;
     initialization(tables);
     System.out.println("initialization finished.");
-    System.out.println(useJoin);
-    System.out.println(useWhere);
     if (!useJoin) {
       if (!useWhere) {
         return getCondition(tables.get(0));

@@ -141,8 +141,11 @@ public class SessionRuntime {
           if (selectPlan.broken)
             return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
           ArrayList<Table.TableMetadata> tables = new ArrayList<>();
-          for (String tableName : selectPlan.tableNames)
+          for (String tableName : selectPlan.tableNames) {
+            System.out.println(tableName);
+            System.out.println(currentDatabaseMetadata.getTableByName(tableName));
             tables.add(currentDatabaseMetadata.getTableByName(tableName));
+          }
           System.out.println("SELECT starting");
           QueryResult result = selectPlan.getResult(transactionId, tables);
           System.out.println("SELECT finished");

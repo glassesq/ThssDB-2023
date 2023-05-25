@@ -1,7 +1,6 @@
 package cn.edu.thssdb.query;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 
 public class QueryResult {
   public ArrayList<String> columns;
