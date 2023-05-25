@@ -118,24 +118,27 @@ public class Client {
       ExecuteStatementResp resp = client.executeStatement(req);
       if (resp.status.code == Global.SUCCESS_CODE) {
         if (resp.hasResult) {
-          // TOFIX: columnsList and rowList may be null.
-          StringBuilder column_str = new StringBuilder();
-          int column_size = resp.columnsList.size();
-          for (int i = 0; i < column_size; ++i) {
-            column_str.append(resp.columnsList.get(i));
-            if (i != column_size - 1) column_str.append(", ");
-          }
-          println(column_str.toString());
-          println("----------------------------------------------------------------");
+          if (resp.columnsList != null) {
+            StringBuilder column_str = new StringBuilder();
+            int column_size = resp.columnsList.size();
 
-          for (List<String> row : resp.rowList) {
-            StringBuilder row_str = new StringBuilder();
             for (int i = 0; i < column_size; ++i) {
-              row_str.append(row.get(i));
-              if (i != column_size - 1) row_str.append(", ");
+              column_str.append(resp.columnsList.get(i));
+              if (i != column_size - 1) column_str.append(", ");
             }
-            println(row_str.toString());
-          }
+            println(column_str.toString());
+            println("----------------------------------------------------------------");
+            if (resp.rowList != null) {
+              for (List<String> row : resp.rowList) {
+                StringBuilder row_str = new StringBuilder();
+                for (int i = 0; i < column_size; ++i) {
+                  row_str.append(row.get(i));
+                  if (i != column_size - 1) row_str.append(", ");
+                }
+                println(row_str.toString());
+              }
+            }
+          } else println("null");
         } else {
           println(resp.status.getMsg());
         }

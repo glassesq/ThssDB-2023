@@ -143,11 +143,20 @@ public class SessionRuntime {
           ArrayList<Table.TableMetadata> tables = new ArrayList<>();
           for (String tableName : selectPlan.tableNames)
             tables.add(currentDatabaseMetadata.getTableByName(tableName));
+          System.out.println("SELECT starting");
           QueryResult result = selectPlan.getResult(transactionId, tables);
+          System.out.println("SELECT finished");
           response =
               new ExecuteStatementResp(StatusUtil.success("Select operation completed"), true);
           response.setColumnsList(result.columns);
-          for (ArrayList<String> row : result.rows) response.addToRowList(row);
+          for (ArrayList<String> row : result.rows) {
+            response.addToRowList(row);
+            int i = 0;
+            for (String e : row) {
+              System.out.println(result.columns.get(i) + e);
+              ++i;
+            }
+          }
           return response;
         default:
       }

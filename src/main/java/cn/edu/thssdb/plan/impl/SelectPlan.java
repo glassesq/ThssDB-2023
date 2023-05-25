@@ -11,6 +11,7 @@ import cn.edu.thssdb.schema.ValueWrapper;
 import cn.edu.thssdb.sql.SQLParser;
 import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.utils.Pair;
+import org.stringtemplate.v4.AutoIndentWriter;
 
 import java.util.ArrayList;
 
@@ -34,21 +35,26 @@ public class SelectPlan extends LogicalPlan {
   public QueryResult res;
   public long transactionId = -1;
 
-  public void initialization(ArrayList<Table.TableMetadata> tables) throws Exception {
+  public void initialization(ArrayList<Table.TableMetadata> tables) {
+    System.out.println("initailization start");
     res = new QueryResult();
+    colInTable = new ArrayList<>();
     for (SQLParser.ColumnFullNameContext column : columns) {
       res.columns.add(column.getText());
+      System.out.println(tables.get(0).name);
       for (Table.TableMetadata table : tables)
-        if (table.name.equals(column.tableName().getText())) {
+        if (tables.size() == 1 || table.name.equals(column.tableName().getText())) {
           String keyName = column.columnName().getText();
+          System.out.println(column.getText());
           if (table.columnNames.get(keyName) == null)
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + table.name + "'");
           colInTable.add(table.getColumnDetailByName(keyName));
+          System.out.println(table.getColumnDetailByName(keyName).toString());
           break;
         }
     }
-
+    System.out.println("init-1");
     Table.TableMetadata table = !useJoin ? tables.get(0) : null;
     int i = 0;
     for (Table.TableMetadata t : tables) {
@@ -88,13 +94,18 @@ public class SelectPlan extends LogicalPlan {
     queryValue.setWithNull(R_where.getText());
   }
 
-  public ArrayList<String> applyProjection(RecordLogical record, Table.TableMetadata table) {
+  public ArrayList<String> applyProjection(RecordLogical record) {
     ArrayList<String> result = new ArrayList<>();
+    System.out.println("---Proj---");
+    System.out.println(columns.size());
     for (int i = 0; i < columns.size(); ++i) {
       int col = colInTable.get(i).primary;
       if (col >= 0) result.add(record.primaryKeyValues[col].toString());
-      else result.add(record.nonPrimaryKeyValues[-col - 1].toString());
+      else result.add(record.nonPrimaryKeyValues[-col-1].toString());
+      System.out.println(colInTable.get(i).toString());
+      System.out.println(result.get(i));
     }
+    System.out.println("+++Proj+++");
     return result;
   }
 
@@ -113,7 +124,6 @@ public class SelectPlan extends LogicalPlan {
         pageIter = page.getAllRecordLogical(transactionId);
         if (addRowsWithLess(pageIter, table)) return res;
       } while (pageIter.left > 0);
-
     }
     return res;
   }
@@ -122,9 +132,9 @@ public class SelectPlan extends LogicalPlan {
       Pair<Integer, ArrayList<RecordLogical>> pageIter, Table.TableMetadata table) {
     for (RecordLogical record : pageIter.right) {
       if (record.primaryKeyValues[0].compareTo(queryValue) < 0)
-        res.rows.add(applyProjection(record, table));
+        res.rows.add(applyProjection(record));
       else {
-        if (cmp_where.LT() != null) res.rows.add(applyProjection(record, table));
+        if (cmp_where.LE() != null) res.rows.add(applyProjection(record));
         return true;
       }
     }
@@ -155,20 +165,21 @@ public class SelectPlan extends LogicalPlan {
     ValueWrapper[] query = {queryValue};
     Pair<Boolean, IndexPage.RecordInPage> key =
         rootPage.scanTreeAndReturnRecord(transactionId, query);
-    if (key.left) applyProjection(new RecordLogical(key.right, table), table);
+    if (key.left) applyProjection(new RecordLogical(key.right, table));
     return res;
   }
 
   public boolean checkCondition(ValueWrapper A, ValueWrapper B, SQLParser.ComparatorContext cmp) {
     if (cmp.NE() != null && A.compareTo(B) != 0) return true;
     if (cmp.EQ() != null && A.compareTo(B) == 0) return true;
-    if (cmp.LE() != null && A.compareTo(B) < 0) return true;
-    if (cmp.LT() != null && A.compareTo(B) <= 0) return true;
-    if (cmp.GE() != null && A.compareTo(B) > 0) return true;
-    return cmp.GT() != null && A.compareTo(B) >= 0;
+    if (cmp.LE() != null && A.compareTo(B) <= 0) return true;
+    if (cmp.LT() != null && A.compareTo(B) < 0) return true;
+    if (cmp.GE() != null && A.compareTo(B) >= 0) return true;
+    return cmp.GT() != null && A.compareTo(B) > 0;
   }
   // 多列主键/非主键/单列主键，查询不等于
   public QueryResult getCondition(Table.TableMetadata table) throws Exception {
+    System.out.println("getCondtion!");
     IndexPage rootPage =
         (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
     Pair<Integer, ArrayList<RecordLogical>> pageIter = rootPage.getLeftmostDataPage(transactionId);
@@ -180,7 +191,6 @@ public class SelectPlan extends LogicalPlan {
         pageIter = page.getAllRecordLogical(transactionId);
         addRowsWithCondition(pageIter, table);
       } while (pageIter.left > 0);
-
     }
     return res;
   }
@@ -195,7 +205,7 @@ public class SelectPlan extends LogicalPlan {
                 : record.primaryKeyValues[queryCol.primary];
         if (!checkCondition(recordValue, queryValue, cmp_where)) continue; // 不满足条件
       }
-      res.rows.add(applyProjection(record, table));
+      res.rows.add(applyProjection(record));
     }
   }
 
@@ -291,6 +301,9 @@ public class SelectPlan extends LogicalPlan {
       throws Exception {
     this.transactionId = transactionId;
     initialization(tables);
+    System.out.println("initialization finished.");
+    System.out.println(useJoin);
+    System.out.println(useWhere);
     if (!useJoin) {
       if (!useWhere) {
         return getCondition(tables.get(0));
