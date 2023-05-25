@@ -41,26 +41,37 @@ public class SelectPlan extends LogicalPlan {
     for (SQLParser.ColumnFullNameContext column: columns)
       res.columns.add(column.getText());
 
-    if (!useWhere) return;
-    String keyName = L_where.columnName().getText();
-    Table.TableMetadata table = null;
+    Table.TableMetadata table = !useJoin ? tables.get(0) : null;
     int i = 0;
     for (Table.TableMetadata t : tables) {
-      if (t.name.equals(L_where.tableName().getText()))
+      if (useWhere && useJoin && t.name.equals(L_where.tableName().getText()))
         table = t;
       if (useOn) {
         if (t.name.equals(L_on.tableName().getText())) {
+          String keyName = L_on.columnName().getText();
+          if (t.columns.get(keyName) == null)
+            throw new IllegalArgumentException("Column '" + keyName + "' not found in table '" + t.name +"'");
           L_index = i;
-          L_queryCol = t.columnDetails.get(t.columns.get(L_on.columnName().getText()));
+          L_queryCol = t.columnDetails.get(t.columns.get(keyName));
         }
         if (t.name.equals(R_on.tableName().getText())) {
+          String keyName = R_on.columnName().getText();
+          if (t.columns.get(keyName) == null)
+            throw new IllegalArgumentException("Column '" + keyName + "' not found in table '" + t.name +"'");
           R_index = i;
-          R_queryCol = t.columnDetails.get(t.columns.get(R_on.columnName().getText()));
+          R_queryCol = t.columnDetails.get(t.columns.get(keyName));
         }
       }
       ++i;
     }
-    if (table == null) throw new Exception(); // TODO 异常处理
+    if (!useWhere) return;
+
+    String keyName = L_where.columnName().getText();
+    if (table == null)
+      throw new IllegalArgumentException("Table " + L_where.tableName().getText() + " not found in FROM clause.");
+    if (table.columns.get(keyName) == null)
+      throw new IllegalArgumentException("Column '" + keyName + "' not found in table '" + table.name +"'");
+
     queryCol = table.columnDetails.get(table.columns.get(keyName));
     queryValue = new ValueWrapper(queryCol);
     queryValue.setWithNull(R_where.getText());
