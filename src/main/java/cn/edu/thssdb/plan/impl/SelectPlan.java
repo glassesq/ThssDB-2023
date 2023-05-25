@@ -113,6 +113,7 @@ public class SelectPlan extends LogicalPlan {
         pageIter = page.getAllRecordLogical(transactionId);
         if (addRowsWithLess(pageIter, table)) return res;
       } while (pageIter.left > 0);
+
     }
     return res;
   }
@@ -179,6 +180,7 @@ public class SelectPlan extends LogicalPlan {
         pageIter = page.getAllRecordLogical(transactionId);
         addRowsWithCondition(pageIter, table);
       } while (pageIter.left > 0);
+
     }
     return res;
   }

@@ -70,7 +70,17 @@ public class DiskBufferTest {
     Column column = new Column();
     String columnName = "columnOne";
     column.prepare(columnName, DataType.INT, 0);
-    tableMetadata.addColumn(columnName, column);
+    column.setPrimaryKey(0);
+
+    ArrayList<String> names = new ArrayList<>();
+    names.add(columnName);
+    ArrayList<Column> columns = new ArrayList<>();
+    columns.add(column);
+    ArrayList<Integer> orders = new ArrayList<>();
+    orders.add(0);
+
+    tableMetadata.setColumnsAndCompute(names, columns, orders, 1, 0);
+    //    tableMetadata.addColumn(columnName, column);
     currentDatabase.createTable(-1, tableMetadata);
 
     int spaceId = tableMetadata.spaceId;
