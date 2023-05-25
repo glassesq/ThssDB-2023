@@ -2,6 +2,7 @@ package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.schema.Database;
+import org.apache.commons.io.FileUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -20,12 +21,16 @@ public class IndexPageTest {
   public void setup() throws Exception {
     System.out.println("maximum memory: " + Runtime.getRuntime().maxMemory());
     System.out.println(" ##### START TEST");
-    ServerRuntime.config.testPath = "/Users/rongyi/Desktop/testOnly";
+    ServerRuntime.config.testPath = "./testOnly";
     ServerRuntime.config.MetadataFilename = ServerRuntime.config.testPath + "/example.json";
     ServerRuntime.config.WALFilename = ServerRuntime.config.testPath + "/WAL.log";
 
     testDir = new File(ServerRuntime.config.testPath);
-    if (testDir.exists()) testDir.delete();
+    try {
+      FileUtils.deleteDirectory(testDir);
+    } catch (Exception ignore) {
+    }
+
     testDir.mkdirs();
     ServerRuntime.setup();
     /* create an empty database for testing purpose. */
@@ -40,7 +45,11 @@ public class IndexPageTest {
   @After
   public void cleanup() {
     System.out.println("\n ##### END TEST");
-    testDir.delete();
+    try {
+      FileUtils.deleteDirectory(testDir);
+    } catch (Exception ignore) {
+    }
+
     System.out.println("END TEST : metadata clean up \n\n");
   }
 
