@@ -1,21 +1,13 @@
 package cn.edu.thssdb.storage.page;
 
-import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.schema.Database;
-import cn.edu.thssdb.schema.Table;
-import cn.edu.thssdb.storage.DiskBuffer;
-import cn.edu.thssdb.storage.writeahead.WriteLog;
-import org.hamcrest.Factory;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.jupiter.params.ParameterizedTest;
 
-import javax.xml.crypto.Data;
 import java.io.File;
 
-import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 
 public class IndexPageTest {

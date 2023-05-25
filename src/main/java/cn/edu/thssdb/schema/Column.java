@@ -19,7 +19,9 @@ public class Column {
 
   JSONObject object;
 
-  public String getName() { return name; }
+  public String getName() {
+    return name;
+  }
 
   public String toString() {
     return "name: "

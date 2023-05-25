@@ -6,13 +6,9 @@ import cn.edu.thssdb.schema.*;
 import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.storage.page.Page;
 import cn.edu.thssdb.type.DataType;
-import junit.framework.TestSuite;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.jupiter.api.Tag;
-import org.junit.platform.commons.annotation.Testable;
-import org.opentest4j.TestSkippedException;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -44,7 +40,8 @@ public class DiskBufferTest {
     testDir.mkdirs();
 
     ServerRuntime.config.pageSize = (int) (Runtime.getRuntime().maxMemory() / 40);
-    System.out.println("#### Page size is set to " + ServerRuntime.config.pageSize + " for disk buffer test.");
+    System.out.println(
+        "#### Page size is set to " + ServerRuntime.config.pageSize + " for disk buffer test.");
     boolean result = ServerRuntime.config.pageSize > 1024 * 1024;
     assumeFalse(result);
 
@@ -73,7 +70,17 @@ public class DiskBufferTest {
     Column column = new Column();
     String columnName = "columnOne";
     column.prepare(columnName, DataType.INT, 0);
-    tableMetadata.addColumn(columnName, column);
+    column.setPrimaryKey(0);
+
+    ArrayList<String> names = new ArrayList<>();
+    names.add(columnName);
+    ArrayList<Column> columns = new ArrayList<>();
+    columns.add(column);
+    ArrayList<Integer> orders = new ArrayList<>();
+    orders.add(0);
+
+    tableMetadata.setColumnsAndCompute(names, columns, orders, 1, 0);
+    //    tableMetadata.addColumn(columnName, column);
     currentDatabase.createTable(-1, tableMetadata);
 
     int spaceId = tableMetadata.spaceId;
