@@ -34,29 +34,35 @@ public class Table {
 
     /** if the table is inited (The relevant tablespace file is already in disk buffer or disk.) */
     public boolean inited = false;
-    /** ColumnName to column index */
+
+    /** column name to column primary field */
+    // TODO: change to private
     public HashMap<String, Integer> columnNames = new HashMap<>();
 
-    /** column index to column object (detail) */
+    /** <b>Aligned</b> column primary field to column detail
+     *  {@code [0, nonPrimaryKeyNumber)} stores column whose primary field ranges from -nonPrimaryKeyNumber to -1.
+     *  {@code [nonPrimaryKeyNumber, primaryKeyNumber + nonPrimaryKeyNumber) stores column whose primary field ranges from 0 to primaryKeyNumber - 1.
+     */
     // TODO: change to private
     public ArrayList<Column> columnDetails = new ArrayList<>();
 
-    public ArrayList<Integer> columnCreatingOrder = new ArrayList<>();
+    /** column creating order (in create table statement) to column primary field */
+    // TODO: change to private
+    private ArrayList<Integer> columnCreatingOrder = new ArrayList<>();
 
     /** Json object of overall table metadata */
     public JSONObject object;
 
-    /** Json arrays of column object */
+    /** Json arrays of column object * <b> saved in the creating order </b> */
     public JSONArray columnObjectArray;
 
-    private int nonPrimaryKeyNumber = 0;
-
-    private int nonPrimaryKeyLength = 0;
-
-    private final ArrayList<Integer> nonPrimaryKeyOffset = new ArrayList<>();
     private int primaryKeyNumber = 0;
     private int primaryKeyLength = 0;
     private final ArrayList<Integer> primaryKeyOffset = new ArrayList<>();
+
+    private int nonPrimaryKeyNumber = 0;
+    private int nonPrimaryKeyLength = 0;
+    private final ArrayList<Integer> nonPrimaryKeyOffset = new ArrayList<>();
 
     private int nullableKeyNumber = 0;
 
@@ -64,7 +70,11 @@ public class Table {
       return nonPrimaryKeyNumber + primaryKeyNumber;
     }
 
-    public int getPrimaryFieldByCreatingOrder(int creatingOrder) {
+    public Integer getPrimaryFieldByName(String name) {
+      return columnNames.get(name);
+    }
+
+    public Integer getPrimaryFieldByCreatingOrder(int creatingOrder) {
       return columnCreatingOrder.get(creatingOrder);
     }
 
@@ -90,6 +100,9 @@ public class Table {
       this.primaryKeyNumber = primaryKeyNumber;
       this.nonPrimaryKeyNumber = nonPrimaryKeyNumber;
       this.nullableKeyNumber = nonPrimaryKeyNumber; /* TODO */
+      for (int i = 0; i < primaryKeyNumber + nonPrimaryKeyNumber; i++) {
+        columnDetails.add(null);
+      }
       for (int i = 0; i < _names.size(); i++) {
         Column column = _columns.get(i);
         columnDetails.set(nonPrimaryKeyNumber + column.primary, column);
@@ -107,7 +120,7 @@ public class Table {
       }
       this.columnCreatingOrder = _columnOrder;
       for (Integer index : this.columnCreatingOrder) {
-        columnObjectArray.put(columnDetails.get(index).object);
+        columnObjectArray.put(columnDetails.get(nonPrimaryKeyNumber + index).object);
       }
     }
 
@@ -123,11 +136,16 @@ public class Table {
       return primaryKeyLength;
     }
 
+    /**
+     * get primary key name list
+     *
+     * @return name list of primary keys
+     */
     public ArrayList<String> getPrimaryKeyList() {
-      // TODO: optimization
       ArrayList<String> keys = new ArrayList<>();
-      for (Column columnDetail : columnDetails)
-        if (columnDetail.primary >= 0) keys.add(columnDetail.toString());
+      for (int i = 0; i < this.primaryKeyNumber; i++) {
+        keys.add(getColumnDetailByOrderInType(i, true).getName());
+      }
       return keys;
     }
 
@@ -136,14 +154,12 @@ public class Table {
     }
 
     /**
-     * get the length of nullBitmap for this table
+     * get the length of nullBitmap for this table TODO: optimization
      *
      * @return number of bytes
      */
     public int getNullBitmapLengthInByte() {
-      // TODO: optimization
-      /* ceil */
-      return ((nullableKeyNumber + 7) / 8);
+      return ((nullableKeyNumber + 7) / 8); /* ceiling to full byte */
     }
 
     /**
@@ -214,11 +230,38 @@ public class Table {
       metadata.tablespaceFilename = object.getString("tablespaceFile");
 
       metadata.columnObjectArray = object.getJSONArray("columns");
+      metadata.primaryKeyNumber = 0;
+      metadata.nonPrimaryKeyNumber = 0;
+      for (int i = 0; i < metadata.columnObjectArray.length(); i++) {
+        int primary = metadata.columnObjectArray.getJSONObject(i).getInt("primaryKey");
+        if (primary >= 0) metadata.primaryKeyNumber += 1;
+        else metadata.nonPrimaryKeyNumber += 1;
+        metadata.columnCreatingOrder.add(primary);
+      }
+      metadata.nullableKeyNumber = metadata.nonPrimaryKeyNumber;
+
+      for (int i = 0; i < metadata.primaryKeyNumber + metadata.nonPrimaryKeyNumber; i++) {
+        metadata.columnDetails.add(null);
+      }
+
       for (int i = 0; i < metadata.columnObjectArray.length(); i++) {
         Column column = Column.parse(metadata.columnObjectArray.getJSONObject(i));
         String name = metadata.columnObjectArray.getJSONObject(i).getString("columnName");
-        metadata.columnNames.put(name, i);
-        metadata.columnDetails.add(column);
+
+        metadata.columnNames.put(name, column.primary);
+        metadata.columnDetails.set(column.primary + metadata.nonPrimaryKeyNumber, column);
+      }
+
+      metadata.primaryKeyLength = 0;
+      for (int i = 0; i < metadata.primaryKeyNumber; i++) {
+        metadata.primaryKeyOffset.add(metadata.primaryKeyLength);
+        metadata.primaryKeyLength += metadata.getColumnDetailByPrimaryField(i).getLength();
+      }
+
+      metadata.nonPrimaryKeyLength = 0;
+      for (int i = -1; i >= -metadata.nonPrimaryKeyNumber; i--) {
+        metadata.nonPrimaryKeyOffset.add(metadata.nonPrimaryKeyLength);
+        metadata.nonPrimaryKeyLength += metadata.getColumnDetailByPrimaryField(i).getLength();
       }
 
       /* since the tableMetadata is formed according to an existed json object, it must be on disk. */
@@ -251,18 +294,12 @@ public class Table {
       System.out.println("index root page over.");
     }
 
-    public void addColumn(String name, Column column) {
-      int size = columnDetails.size();
-      this.columnNames.put(name, size);
-      this.columnDetails.add(column);
-      columnObjectArray.put(column.object);
-    }
-
     /**
      * insert values into this table
      *
      * @param transactionId transaction
-     * @param values value (in the format of ('string', 1234, null))
+     * @param values value (in the format of ('string', 1234, null)), in the order of (primaryKeys,
+     *     nonPrimaryKeys).
      * @throws Exception the primary key is existed.
      */
     public void insertRecord(long transactionId, ArrayList<String> values) throws Exception {
@@ -279,7 +316,7 @@ public class Table {
 
       for (int i = 0; i < nonPrimaryKeyNumber; i++) {
         ValueWrapper valueWrapper = new ValueWrapper(getColumnDetailByOrderInType(i, false));
-        valueWrapper.setWithNull(values.get(i));
+        valueWrapper.setWithNull(values.get(primaryKeyNumber + i));
         recordToBeInserted.nonPrimaryKeyValues[i] = valueWrapper;
       }
 
@@ -305,15 +342,6 @@ public class Table {
   }
 
   public TableMetadata metadata;
-
-  public Table(TableMetadata tableMetadata, boolean isolated) {
-    if (isolated) {
-      /* This table is only temporary. */
-      // TODO: deep copy of tableMetadata
-    } else {
-      this.metadata = tableMetadata;
-    }
-  }
 
   private void recover() {
     // TODO

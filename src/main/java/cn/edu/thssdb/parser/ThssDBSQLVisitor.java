@@ -28,6 +28,7 @@ import cn.edu.thssdb.sql.SQLParser;
 import cn.edu.thssdb.type.DataType;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
@@ -58,6 +59,8 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
     ArrayList<String> names = new ArrayList<>();
     ArrayList<Integer> creatingOrder = new ArrayList<>();
 
+    HashMap<String, Column> temporaryMapColumn = new HashMap<>();
+
     for (SQLParser.ColumnDefContext columnContext : ctx.columnDef()) {
       String name = columnContext.columnName().getText();
       String strType = columnContext.typeName().getText();
@@ -74,11 +77,27 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
       }
       columns.add(column);
       names.add(name);
+
+      if (temporaryMapColumn.containsKey(name)) {
+        /* ill-format like create table x(same int, same int, primary key(same)); */
+        return new CreateTablePlan(true);
+      } else {
+        temporaryMapColumn.put(name, column);
+      }
     }
 
+    SQLParser.TableConstraintContext tableCTX = ctx.tableConstraint();
+    /* ill-format like create table x(id int); there is no primary key. */
+    if (tableCTX == null) return new CreateTablePlan(true);
+
     int order = 0;
-    for (SQLParser.ColumnNameContext columnNameContext : ctx.tableConstraint().columnName()) {
-      tableMetadata.getColumnDetailByName(columnNameContext.getText()).setPrimaryKey(order);
+    for (SQLParser.ColumnNameContext columnNameContext : tableCTX.columnName()) {
+      Column column = temporaryMapColumn.get(columnNameContext.getText());
+      if (column == null) {
+        /* ill-format like create table x(id int, primary key(notExists) );*/
+        return new CreateTablePlan(true);
+      }
+      column.setPrimaryKey(order);
       ++order;
     }
 

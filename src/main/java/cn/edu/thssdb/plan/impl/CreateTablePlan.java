@@ -5,7 +5,13 @@ import cn.edu.thssdb.schema.Table;
 
 public class CreateTablePlan extends LogicalPlan {
 
+  public boolean broken = false;
   public Table.TableMetadata tableMetadata;
+
+  public CreateTablePlan(boolean broken) {
+    super(LogicalPlanType.CREATE_TABLE);
+    this.broken = broken;
+  }
 
   public CreateTablePlan(Table.TableMetadata metadata) {
     super(LogicalPlanType.CREATE_TABLE);
@@ -14,6 +20,6 @@ public class CreateTablePlan extends LogicalPlan {
 
   @Override
   public String toString() {
-    return "CreateTablePlan{" + "databaseName='" + tableMetadata.name + "'}";
+    return "CreateTablePlan{}";
   }
 }

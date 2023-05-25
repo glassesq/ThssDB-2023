@@ -113,6 +113,8 @@ public class SessionRuntime {
       switch (plan.getType()) {
         case CREATE_TABLE:
           CreateTablePlan createTablePlan = (CreateTablePlan) plan;
+          if (createTablePlan.broken)
+            return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
           String name = createTablePlan.tableMetadata.name;
           if (currentDatabaseMetadata.getTableByName(name) != null)
             return new ExecuteStatementResp(StatusUtil.fail("Table " + name + " existed."), false);
@@ -142,10 +144,10 @@ public class SessionRuntime {
           for (String tableName : selectPlan.tableNames)
             tables.add(currentDatabaseMetadata.getTableByName(tableName));
           QueryResult result = selectPlan.getResult(transactionId, tables);
-          response = new ExecuteStatementResp(StatusUtil.success("Select operation completed"), true);
+          response =
+              new ExecuteStatementResp(StatusUtil.success("Select operation completed"), true);
           response.setColumnsList(result.columns);
-          for (ArrayList<String> row : result.rows)
-            response.addToRowList(row);
+          for (ArrayList<String> row : result.rows) response.addToRowList(row);
           return response;
         default:
       }

@@ -1,6 +1,7 @@
 package cn.edu.thssdb.plan.impl;
 
 import cn.edu.thssdb.plan.LogicalPlan;
+import cn.edu.thssdb.schema.Column;
 import cn.edu.thssdb.schema.Table;
 
 import java.util.ArrayList;
@@ -38,17 +39,22 @@ public class InsertPlan extends LogicalPlan {
         this.broken = true;
       }
     }
-    if (this.valueSize != this.columnSize) this.broken = true;
+    if (this.valueSize != this.columnSize && this.columnSize != 0) this.broken = true;
   }
 
   /**
    * get values to be inserted in the order of {@code metadata.columns}
    *
    * @param metadata table metadata
-   * @return values to be inserted in the order of {@code metadata.columns}
+   * @return values to be inserted in the order of (primaryKeys, nonPrimaryKeys).
    */
-  public ArrayList<ArrayList<String>> getValues(Table.TableMetadata metadata) {
+  public ArrayList<ArrayList<String>> getValues(Table.TableMetadata metadata) throws Exception {
     ArrayList<ArrayList<String>> results = new ArrayList<>();
+
+    if (this.valueSize > metadata.getColumnNumber()) {
+      throw new Exception(
+          "The number of values " + this.valueSize + " is larger than that of columns.");
+    }
 
     HashMap<Integer, Integer> columnPrimaryFields = new HashMap<>();
     if (this.columnSize == 0) {
@@ -57,8 +63,14 @@ public class InsertPlan extends LogicalPlan {
       }
     } else {
       for (int i = 0; i < this.columnSize; i++) {
-        columnPrimaryFields.put(
-            metadata.getColumnDetailByName(columnNamesToBeInserted.get(i)).primary, i);
+        Integer primary = metadata.getPrimaryFieldByName(columnNamesToBeInserted.get(i));
+        if (primary == null)
+          throw new Exception(
+              "inserted column name " + columnNamesToBeInserted.get(i) + " not exists");
+        if (columnPrimaryFields.containsKey(primary))
+          throw new Exception(
+              "inserted column name " + columnNamesToBeInserted.get(i) + " duplicates.");
+        columnPrimaryFields.put(primary, i);
       }
     }
 
@@ -70,17 +82,35 @@ public class InsertPlan extends LogicalPlan {
 
       for (int i = 0; i < primaryKeyNumber; i++) {
         Integer index = columnPrimaryFields.get(i);
-        if (index != null) result.add(valueToBeInserted.get(index));
-        else result.add("null");
+        String value = "null";
+        if (index != null) value = valueToBeInserted.get(index);
+
+        Column column = metadata.getColumnDetailByOrderInType(i, true);
+        if (column.isNotNull() && value.equals("null")) {
+          throw new Exception("column " + column.getName() + " can not be null but value is null");
+        }
+
+        result.add(value);
       }
 
-      for (int i = -1; i >= nonPrimaryKeyNumber; i--) {
+      for (int i = -1; i >= -nonPrimaryKeyNumber; i--) {
         Integer index = columnPrimaryFields.get(i);
-        if (index != null) result.add(valueToBeInserted.get(index));
-        else result.add("null");
+        String value = "null";
+        if (index != null) value = valueToBeInserted.get(index);
+
+        Column column = metadata.getColumnDetailByOrderInType(i, true);
+        if (column.isNotNull() && value.equals("null")) {
+          throw new Exception("column " + column.getName() + " can not be null but value is null");
+        }
+
+        result.add(value);
       }
 
       // TODO: check for NOT NULL constraint
+      for (String value : result) {
+        System.out.print(value + " ");
+      }
+      System.out.println("****");
 
       results.add(result);
     }

@@ -8,17 +8,23 @@ import java.util.regex.Pattern;
 
 public class Column {
 
+  private String name;
+
   public DataType type;
   public int primary = -1;
-  public boolean notNull = false;
+  private boolean notNull = false;
   private int length;
   public boolean offPage = false;
   // TODO: stored off page.
 
   JSONObject object;
 
+  public String getName() { return name; }
+
   public String toString() {
-    return "type: "
+    return "name: "
+        + name
+        + "type: "
         + type
         + " primaryKey: "
         + primary
@@ -39,6 +45,7 @@ public class Column {
    * @param length Length of the data. Only used when type is STRING
    */
   public void prepare(String name, DataType type, int length) {
+    this.name = name;
     this.object = new JSONObject();
     this.object.put("columnName", name);
     this.type = type;
@@ -47,6 +54,10 @@ public class Column {
       this.length = length;
       this.object.put("length", length);
     }
+  }
+
+  public boolean isNotNull() {
+    return primary >= 0 || notNull;
   }
 
   public static Column parse(JSONObject object) throws Exception {
@@ -114,11 +125,9 @@ public class Column {
       case STRING:
         return length * ServerRuntime.config.maxCharsetLength;
       case INT:
-        return 4;
-      case LONG:
-        return 8;
       case FLOAT:
         return 4;
+      case LONG:
       case DOUBLE:
         return 8;
     }
