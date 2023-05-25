@@ -20,7 +20,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assume.assumeFalse;
 import static org.junit.Assume.assumeNotNull;
 
-public class DiskBufferTest {
+public class DiskBufferTestLimited {
 
   String databaseName = "databaseForDiskBufferTest";
   Database.DatabaseMetadata currentDatabase = null;
