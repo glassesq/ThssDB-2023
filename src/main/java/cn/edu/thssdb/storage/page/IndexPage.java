@@ -766,8 +766,10 @@ public class IndexPage extends Page {
           currentPage.scanInternal(transactionId, dataRecordToBeInserted.primaryKeyValues);
       if (insertResult.right.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
         if (currentPage.notSafeToInsert(maxLength)) {
-          if (!currentPage.splitMyself(transactionId, ancestors)) return false;
+          ServerRuntime.getLock(transactionId, currentPage.pageReadAndWriteLatch.writeLock());
+          if (!currentPage.splitMyselfWithLock(transactionId, ancestors)) return false;
         }
+        ServerRuntime.getLock(transactionId, currentPage.pageReadAndWriteLatch.writeLock());
         currentPage.insertDataRecordInternal(
             transactionId, dataRecordToBeInserted, insertResult.right);
         currentPage.bLinkTreeLatch.unlock();
@@ -899,6 +901,81 @@ public class IndexPage extends Page {
   }
 
   /**
+   * split root with write lock to the new pages. The records in the root node are divided equally
+   * into two new pages. After splitting, the root node has two records that point to these two new
+   * pages. {@code this.bLinkTreeLatch} is held for the entire time.
+   *
+   * @param transactionId transaction
+   * @return true if succeed
+   */
+  public boolean splitRootWithLock(long transactionId) {
+    Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
+
+    ArrayList<RecordInPage> recordInPage = new ArrayList<>();
+    RecordInPage oldSupremeRecord = getRecordInPageAndReturnSupreme(recordInPage);
+    if (recordInPage.size() < 2) return false;
+
+    boolean firstSplit = infimumRecord.nextRecordInPage.recordType == RecordInPage.USER_DATA_RECORD;
+
+    int leftPageId, rightPageId;
+    try {
+      OverallPage overallPage =
+          (OverallPage) IO.read(this.spaceId, ServerRuntime.config.overallPageIndex);
+      if (!firstSplit) {
+        leftPageId = overallPage.allocatePage(transactionId);
+      } else {
+        leftPageId = ServerRuntime.config.indexLeftmostLeafIndex;
+      }
+      rightPageId = overallPage.allocatePage(transactionId);
+    } catch (Exception e) {
+      return false;
+    }
+    IndexPage leftPage = createIndexPage(transactionId, this.spaceId, leftPageId);
+    IndexPage rightPage = createIndexPage(transactionId, this.spaceId, rightPageId);
+    ServerRuntime.getLock(transactionId, leftPage.pageReadAndWriteLatch.writeLock());
+    ServerRuntime.getLock(transactionId, rightPage.pageReadAndWriteLatch.writeLock());
+
+    RecordInPage leftPageSupremeRecord = leftPage.infimumRecord.nextRecordInPage;
+    RecordInPage maxRecordInLeft =
+        prepareHalfPageRecordList(leftPage, metadata, recordInPage, 0, recordInPage.size() / 2);
+    leftPageSupremeRecord.nextAbsoluteOffset = rightPageId;
+    leftPageSupremeRecord.unsetRightest();
+
+    RecordInPage rightPageSupremeRecord = rightPage.infimumRecord.nextRecordInPage;
+    RecordInPage maxRecordInRight =
+        prepareHalfPageRecordList(
+            rightPage, metadata, recordInPage, recordInPage.size() / 2, recordInPage.size());
+    rightPageSupremeRecord.nextAbsoluteOffset = oldSupremeRecord.nextAbsoluteOffset;
+    rightPageSupremeRecord.setRightest();
+
+    RecordInPage leftPointerRecord = makePointerRecord(maxRecordInLeft, leftPageId);
+    leftPointerRecord.myOffset = 64 + 4 + metadata.getNullBitmapLengthInByte();
+
+    RecordInPage rightPointerRecord = makePointerRecord(maxRecordInRight, rightPageId);
+    rightPointerRecord.myOffset =
+        leftPointerRecord.myOffset + metadata.getMaxRecordLength(RecordInPage.USER_POINTER_RECORD);
+
+    RecordInPage newSupremeRecord =
+        RecordInPage.createRecordInPageEntry(
+            RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, rightPageId);
+    newSupremeRecord.setRightest();
+
+    leftPointerRecord.setNextRecordInPage(rightPointerRecord);
+    rightPointerRecord.setNextRecordInPage(newSupremeRecord);
+
+    infimumRecord.nextAbsoluteOffset = leftPointerRecord.myOffset;
+    /* ******************************** BEGIN ATOMIC ********************* */
+    infimumRecord.nextRecordInPage = leftPointerRecord;
+    /* ******************************** END ATOMIC ********************* */
+
+    leftPage.writeAll(transactionId);
+    rightPage.writeAll(transactionId);
+    this.writeAll(transactionId);
+
+    return true;
+  }
+
+  /**
    * split myself into two pages. The records in the current node are divided equally into two
    * pages. The smaller half of the record is left in the original page, and the larger half is
    * placed in the new page. The new page is exactly to the right of the original page. Suitable
@@ -929,6 +1006,77 @@ public class IndexPage extends Page {
       return false;
     }
     IndexPage rightPage = createIndexPage(transactionId, this.spaceId, rightPageId);
+    RecordInPage rightPageSupremeRecord = rightPage.infimumRecord.nextRecordInPage;
+    RecordInPage maxRecordInRight =
+        prepareHalfPageRecordList(
+            rightPage,
+            metadata,
+            originalRecordsInPage,
+            originalRecordsInPage.size() / 2,
+            originalRecordsInPage.size());
+    if (maxRecordInRight == null) return false;
+    maxRecordInRight.setNextRecordInPage(rightPageSupremeRecord);
+
+    /* make new supreme record */
+    RecordInPage newSupremeRecord =
+        makeNewSupremeRecordInLeft(oldSupremeRecord, rightPageId, rightPageSupremeRecord);
+
+    RecordInPage rightestRecordInLeftPage =
+        originalRecordsInPage.get(originalRecordsInPage.size() / 2 - 1);
+    /* ********************** BEGIN ATOMIC ********************** */
+    rightestRecordInLeftPage.nextRecordInPage = newSupremeRecord;
+    /* ********************** END ATOMIC ********************** */
+
+    this.freespaceStart =
+        maxRecordInRight.myOffset
+            + metadata.getMaxRecordLength(maxRecordInRight.recordType)
+            - 4
+            - maxRecordInRight.nullBitmap.length; /* TODO: more precious compute */
+
+    int maxLength = metadata.getMaxRecordLength(RecordInPage.USER_POINTER_RECORD);
+    if (!moveRightAndInsertPointer(
+        transactionId, ancestors, maxLength, rightPageId, maxRecordInRight)) {
+      System.out.println("The pointer record is missing for splitting process.");
+    }
+
+    this.writeAll(transactionId);
+    rightPage.writeAll(transactionId);
+
+    return true;
+  }
+
+  /**
+   * split myself into two pages with write lock to the new page. The records in the current node
+   * are divided equally into two pages. The smaller half of the record is left in the original
+   * page, and the larger half is placed in the new page. The new page is exactly to the right of
+   * the original page. Suitable pointer record is added to the parent node as well. <br>
+   * If the join involves a node split, it completes recursively. {@code this.bLinkTreeLatch} is
+   * held during the entire process.
+   *
+   * @param transactionId transaction
+   * @param ancestors a stack containing the rightmost page of each layer above
+   * @return true if succeed
+   */
+  public boolean splitMyselfWithLock(long transactionId, Stack<IndexPage> ancestors) {
+    if (isRoot()) {
+      return splitRootWithLock(transactionId);
+    }
+
+    Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
+    ArrayList<RecordInPage> originalRecordsInPage = new ArrayList<>();
+    RecordInPage oldSupremeRecord = getRecordInPageAndReturnSupreme(originalRecordsInPage);
+    if (originalRecordsInPage.size() < 2) return false;
+
+    int rightPageId;
+    try {
+      OverallPage overallPage =
+          (OverallPage) IO.read(this.spaceId, ServerRuntime.config.overallPageIndex);
+      rightPageId = overallPage.allocatePage(transactionId);
+    } catch (Exception e) {
+      return false;
+    }
+    IndexPage rightPage = createIndexPage(transactionId, this.spaceId, rightPageId);
+    ServerRuntime.getLock(transactionId, rightPage.pageReadAndWriteLatch.writeLock());
     RecordInPage rightPageSupremeRecord = rightPage.infimumRecord.nextRecordInPage;
     RecordInPage maxRecordInRight =
         prepareHalfPageRecordList(
