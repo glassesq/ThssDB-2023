@@ -966,7 +966,7 @@ public class IndexPage extends Page {
 
     RecordInPage newSupremeRecord =
         RecordInPage.createRecordInPageEntry(
-            RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, rightPageId);
+            RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, rightPageId, 0);
     newSupremeRecord.setRightest();
 
     leftPointerRecord.setNextRecordInPage(rightPointerRecord);
@@ -1359,11 +1359,8 @@ public class IndexPage extends Page {
     RecordInPage record = infimumRecord.nextRecordInPage;
     RecordInPage previousRecord = infimumRecord;
     while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
-      System.out.println(Arrays.toString(searchKey[0].bytes));
-      System.out.println(Arrays.toString(record.primaryKeyValues[0].bytes));
       int compareResult = ValueWrapper.compareArray(searchKey, record.primaryKeyValues);
       if (compareResult == 0) {
-        System.out.println(Arrays.toString(record.primaryKeyValues));
         return new Pair<>(true, record);
       } else if (compareResult < 0) {
         if (record.recordType == RecordInPage.USER_POINTER_RECORD) return new Pair<>(false, record);

@@ -129,13 +129,9 @@ public class IndexPageTest {
       RecordLogical recordSecond = new RecordLogical(recordInPage, tableMetadata);
 
       for (int i = 0; i < record.primaryKeyValues.length; i++) {
-        System.out.println(
-            recordSecond.primaryKeyValues[i].toString() + " " + primaryString.get(i));
         assert (recordSecond.primaryKeyValues[i].toString().equals(primaryString.get(i)));
       }
       for (int i = 0; i < record.nonPrimaryKeyValues.length; i++) {
-        System.out.println(
-            recordSecond.nonPrimaryKeyValues[i].toString() + " " + nonPrimaryString.get(i));
         assert (recordSecond.nonPrimaryKeyValues[i].toString().equals(nonPrimaryString.get(i)));
       }
 
@@ -143,12 +139,9 @@ public class IndexPageTest {
           new RecordLogical(new IndexPage.RecordInPage(recordInPage), tableMetadata);
 
       for (int i = 0; i < record.primaryKeyValues.length; i++) {
-        System.out.println(recordThird.primaryKeyValues[i].toString() + " " + primaryString.get(i));
         assert (recordThird.primaryKeyValues[i].toString().equals(primaryString.get(i)));
       }
       for (int i = 0; i < record.nonPrimaryKeyValues.length; i++) {
-        System.out.println(
-            recordThird.nonPrimaryKeyValues[i].toString() + " " + nonPrimaryString.get(i));
         assert (recordThird.nonPrimaryKeyValues[i].toString().equals(nonPrimaryString.get(i)));
       }
 
@@ -166,10 +159,8 @@ public class IndexPageTest {
       recordsInRoot.add(record);
 
       insertPos = rootPage.scanTreeAndReturnRecord(transactionId, recordThird.primaryKeyValues);
-      System.out.println(rootPage.freespaceStart);
       assertTrue(insertPos.left);
 
-      System.out.println("start test pointer **********");
       IndexPage pageIndex =
           IndexPage.createIndexPage(
               transactionId,
@@ -188,22 +179,13 @@ public class IndexPageTest {
 
       IndexPage.RecordInPage readRecordPointer = new IndexPage.RecordInPage();
 
-      System.out.println("myOffset:" + insertPos.right.nextRecordInPage.myOffset);
-
       readRecordPointer.parseDeeplyInPage(pageIndex, insertPos.right.myOffset, tableMetadata);
 
-      System.out.println(readRecordPointer);
-
       for (int i = 0; i < record.primaryKeyValues.length; i++) {
-        System.out.println(
-            readRecordPointer.primaryKeyValues[i].toString() + " " + primaryString.get(i));
         assert (readRecordPointer.primaryKeyValues[i].toString().equals(primaryString.get(i)));
       }
-
-      System.out.println("end test pointer **********");
     }
 
-    System.out.println("start test root!");
     rootPage.parseAllRecords();
     Pair<Integer, ArrayList<RecordLogical>> recordInRootParsed =
         rootPage.getAllRecordLogical(transactionId);
@@ -223,7 +205,6 @@ public class IndexPageTest {
               recordsInRoot.get(i).nonPrimaryKeyValues),
           0);
     }
-    System.out.println("end test root!");
 
     IndexPage shadowPage = new IndexPage(rootPage.bytes);
     Pair<Integer, ArrayList<RecordLogical>> shadowRecords =
