@@ -23,12 +23,20 @@ public class IndexPage extends Page {
   public static class RecordInPage {
     public int myOffset;
 
-    /* public ArrayList<int> variableFieldLength; */
     public byte[] nullBitmap;
     public byte flags;
 
     public static final byte DELETE_FLAG = 0b1;
     public static final byte RIGHTEST_FLAG = 0b10;
+
+    public void setNull(int nonPrimaryKeyOrder, boolean isNull) {
+      if (isNull) nullBitmap[nonPrimaryKeyOrder / 8] |= (1 << (nonPrimaryKeyOrder % 8));
+      else nullBitmap[nonPrimaryKeyOrder / 8] &= ~(1 << (nonPrimaryKeyOrder % 8));
+    }
+
+    public boolean isNullBit(int nonPrimaryKeyOrder) {
+      return (nullBitmap[nonPrimaryKeyOrder / 8] & (1 << (nonPrimaryKeyOrder % 8))) != 0;
+    }
 
     public void setRightest() {
       flags |= RIGHTEST_FLAG;
@@ -106,7 +114,7 @@ public class IndexPage extends Page {
       this.nonPrimaryKeys = Arrays.copyOf(record.nonPrimaryKeys, record.nonPrimaryKeys.length);
       this.nonPrimaryKeyValues = new ValueWrapper[record.nonPrimaryKeyValues.length];
       for (int i = 0; i < nonPrimaryKeyValues.length; i++) {
-        this.nonPrimaryKeyValues[i] = new ValueWrapper(this.nonPrimaryKeyValues[i]);
+        this.nonPrimaryKeyValues[i] = new ValueWrapper(record.nonPrimaryKeyValues[i]);
       }
       this.nextRecordInPage = null;
     }
@@ -116,7 +124,8 @@ public class IndexPage extends Page {
         int primaryKeyLength,
         int nonPrimaryKeyLength,
         int nullBitmapLength,
-        int nextAbsoluteOffset) {
+        int nextAbsoluteOffset,
+        int childPageId) {
       RecordInPage entry = new RecordInPage();
       entry.recordType = recordType;
       switch (recordType) {
@@ -145,6 +154,7 @@ public class IndexPage extends Page {
           entry.nonPrimaryKeys = new byte[0];
           entry.nullBitmap = new byte[0];
           entry.nextAbsoluteOffset = nextAbsoluteOffset;
+          entry.childPageId = childPageId;
           break;
       }
       return entry;
@@ -156,17 +166,13 @@ public class IndexPage extends Page {
      *
      * @param page page
      * @param pos basic position
-     * @param primaryKeyLength primaryKeyLength
-     * @param nonPrimaryKeyLength nonPrimaryKeyLength
-     * @param nullBitmapLength nullBitmapLength (in byte)
+     * @param metadata table metadata
      */
-    public void parseDeeplyInPage(
-        Page page,
-        int pos,
-        int primaryKeyLength,
-        int nonPrimaryKeyLength,
-        int nullBitmapLength,
-        Table.TableMetadata metadata) {
+    public void parseDeeplyInPage(Page page, int pos, Table.TableMetadata metadata) {
+
+      int primaryKeyLength = metadata.getPrimaryKeyLength();
+      int nonPrimaryKeyLength = metadata.getNonPrimaryKeyLength();
+      int nullBitmapLength = metadata.getNullBitmapLengthInByte();
       this.myOffset = pos;
       /* variable length */
       this.flags = (byte) (page.bytes[pos - 4] & 0xF0);
@@ -255,8 +261,10 @@ public class IndexPage extends Page {
             int length = column.getLength();
             byte[] newValue = new byte[length];
             System.arraycopy(nonPrimaryKeys, nonPrimaryOffsetList.get(i), newValue, 0, length);
-            nonPrimaryKeyValues[i] =
-                new ValueWrapper(newValue, column.type, length, column.offPage);
+            if (this.isNullBit(i)) nonPrimaryKeyValues[i] = new ValueWrapper(true, column.type);
+            else
+              nonPrimaryKeyValues[i] =
+                  new ValueWrapper(newValue, column.type, length, column.offPage);
           }
 
           break;
@@ -427,7 +435,8 @@ public class IndexPage extends Page {
   public IndexPage(byte[] bytes) {
     super(bytes);
     infimumRecord =
-        RecordInPage.createRecordInPageEntry(RecordInPage.SYSTEM_INFIMUM_RECORD, 0, 0, 0, 52 + 10);
+        RecordInPage.createRecordInPageEntry(
+            RecordInPage.SYSTEM_INFIMUM_RECORD, 0, 0, 0, 52 + 10, 0);
     if (pageType == INDEX_PAGE) {
       /* if the page is already set up */
       parseIndexHeader();
@@ -451,7 +460,7 @@ public class IndexPage extends Page {
     indexPage.pageType = INDEX_PAGE;
     //    indexPage.setup();
     RecordInPage supremeRecord =
-        RecordInPage.createRecordInPageEntry(RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, 0);
+        RecordInPage.createRecordInPageEntry(RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, 0, 0);
     if (pageId == ServerRuntime.config.indexRootPageIndex) supremeRecord.setRightest();
     indexPage.writeFILHeader(transactionId);
     indexPage.writeIndexHeader(transactionId);
@@ -576,17 +585,13 @@ public class IndexPage extends Page {
    * this.records; <b> {@code this.spaceId} and its tableMetadata must be traceable in
    * ServerRuntime.</b> The method shall be only called once when inputting this page from disk.
    */
-  private void parseAllRecords() {
+  public void parseAllRecords() {
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
-    int primaryKeyLength = metadata.getPrimaryKeyLength();
-    int nonPrimaryKeyLength = metadata.getNonPrimaryKeyLength();
-    int nullBitmapLength = metadata.getNullBitmapLengthInByte();
 
     int currentPos = 52 + 4;
     RecordInPage record = infimumRecord;
     while (true) {
-      record.parseDeeplyInPage(
-          this, currentPos, primaryKeyLength, nonPrimaryKeyLength, nullBitmapLength, metadata);
+      record.parseDeeplyInPage(this, currentPos, metadata);
       if (currentPos == 52 + 10) {
         break;
       }
@@ -655,7 +660,7 @@ public class IndexPage extends Page {
    * @param metadata metadata of table
    * @return record in page object that is newly made
    */
-  private static RecordInPage makeRecordInPageFromLogical(
+  public static RecordInPage makeRecordInPageFromLogical(
       RecordLogical recordToBeInserted, Table.TableMetadata metadata) {
     RecordInPage record;
     record =
@@ -664,6 +669,7 @@ public class IndexPage extends Page {
             metadata.getPrimaryKeyLength(),
             metadata.getNonPrimaryKeyLength(),
             metadata.getNullBitmapLengthInByte(),
+            0,
             0);
 
     record.primaryKeyValues = new ValueWrapper[recordToBeInserted.primaryKeyValues.length];
@@ -688,12 +694,15 @@ public class IndexPage extends Page {
     record.nonPrimaryKeys = new byte[metadata.getNonPrimaryKeyLength()];
     for (int i = 0; i < nonPrimaryKeyNumber; i++) {
       record.nonPrimaryKeyValues[i] = new ValueWrapper(recordToBeInserted.nonPrimaryKeyValues[i]);
-      System.arraycopy(
-          recordToBeInserted.nonPrimaryKeyValues[i].bytes,
-          0,
-          record.nonPrimaryKeys,
-          nonPrimaryKeyOffsetList.get(i),
-          recordToBeInserted.nonPrimaryKeyValues[i].bytes.length);
+      if (!record.nonPrimaryKeyValues[i].isNull) {
+        System.arraycopy(
+            recordToBeInserted.nonPrimaryKeyValues[i].bytes,
+            0,
+            record.nonPrimaryKeys,
+            nonPrimaryKeyOffsetList.get(i),
+            recordToBeInserted.nonPrimaryKeyValues[i].bytes.length);
+      }
+      record.setNull(i, record.nonPrimaryKeyValues[i].isNull);
     }
 
     return record;
@@ -880,7 +889,7 @@ public class IndexPage extends Page {
 
     RecordInPage newSupremeRecord =
         RecordInPage.createRecordInPageEntry(
-            RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, rightPageId);
+            RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, rightPageId, 0);
     newSupremeRecord.setRightest();
 
     leftPointerRecord.setNextRecordInPage(rightPointerRecord);
@@ -1033,7 +1042,7 @@ public class IndexPage extends Page {
       RecordInPage oldSupremeRecord, int rightPageId, RecordInPage rightPageSupremeRecord) {
     RecordInPage newSupremeRecord =
         RecordInPage.createRecordInPageEntry(
-            RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, rightPageId);
+            RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, rightPageId, 0);
 
     rightPageSupremeRecord.nextAbsoluteOffset = oldSupremeRecord.nextAbsoluteOffset;
     if (oldSupremeRecord.isRightest()) {
@@ -1058,6 +1067,7 @@ public class IndexPage extends Page {
         RecordInPage.createRecordInPageEntry(
             RecordInPage.USER_POINTER_RECORD,
             maxRecordInRight.primaryKeys.length,
+            0,
             0,
             0,
             childPageToPoint);

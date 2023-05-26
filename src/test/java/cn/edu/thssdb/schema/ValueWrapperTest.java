@@ -53,7 +53,7 @@ public class ValueWrapperTest {
     System.out.println("END TEST : metadata clean up \n\n");
   }
 
-  public String createStringRandomly(int length) {
+  public static String createStringRandomly(int length) {
     String pattern =
         " \n\r\tabcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789甲乙丙丁戊己庚辛赵钱孙李周吴郑王";
     StringBuilder result = new StringBuilder();
@@ -64,7 +64,7 @@ public class ValueWrapperTest {
     return result.toString();
   }
 
-  public Pair<String, ValueWrapper> createSingleValueWrapperRandomly(Column column) {
+  public static Pair<String, ValueWrapper> createSingleValueWrapperRandomly(Column column) {
     ValueWrapper vw = new ValueWrapper(column);
     String realValue = null;
     if (ThreadLocalRandom.current().nextDouble() < 0.2) {
