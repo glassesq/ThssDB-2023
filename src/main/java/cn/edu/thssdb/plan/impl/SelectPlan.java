@@ -283,6 +283,43 @@ public class SelectPlan extends LogicalPlan {
   }
 
   public QueryResult getJoin(ArrayList<Table.TableMetadata> tables) throws Exception {
+    /* SELECT tableName1.AttrName1, tableName1.AttrName2…, tableName2.AttrName1, tableName2.AttrName2,…
+       FROM tableName1 JOIN tableName2 ON tableName1.attrName1=tableName2.attrName2
+       WHERE tableName1.id = attrValue;
+    */
+    // Performance Testing Dedicated
+    if (useJoin && useWhere && tables.size() == 2
+            && queryCol.primary >= 0 && L_queryCol.primary >=0 && R_queryCol.primary >= 0
+            && cmp_where.EQ() != null && cmp_on.EQ() != null
+            && tables.get(0).getPrimaryKeyNumber() == 1
+            && tables.get(1).getPrimaryKeyNumber() == 1) {
+      ArrayList<RecordLogical> records = new ArrayList<>();
+      // find record s.t. id = queryValue in table0 and table1
+      for (Table.TableMetadata table : tables) {
+        IndexPage rootPage =
+                (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
+        ValueWrapper[] query = {queryValue};
+        Pair<Boolean, IndexPage.RecordInPage> key =
+                rootPage.scanTreeAndReturnRecord(transactionId, query);
+        if (key.left) records.add(new RecordLogical(key.right, table));
+      }
+      // apply projection operation
+      if (records.size() == 2) {
+        ArrayList<String> result = new ArrayList<>();
+        int i = 0;
+        for (SQLParser.ColumnFullNameContext column : columns) {
+          for (int j = 0; j < records.size(); ++j)
+            if (tables.get(j).name.equals(column.tableName().getText())) {
+              result.add(getRecordValue(records.get(j), colInTable.get(i).primary).toString());
+              break;
+            }
+          ++i;
+        }
+        res.rows.add(result);
+      }
+      return res;
+    }
+    // General situation
     enumPages(tables, 0, new ArrayList<>());
     return res;
   }
