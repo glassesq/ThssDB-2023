@@ -18,6 +18,7 @@ public abstract class LogicalPlan {
     USE_DATABASE,
     COMMIT,
     CREATE_TABLE,
+    SHOW_TABLE,
     INSERT,
     SELECT
   }

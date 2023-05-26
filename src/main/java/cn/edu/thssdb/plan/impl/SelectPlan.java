@@ -288,19 +288,24 @@ public class SelectPlan extends LogicalPlan {
        WHERE tableName1.id = attrValue;
     */
     // Performance Testing Dedicated
-    if (useJoin && useWhere && tables.size() == 2
-            && queryCol.primary >= 0 && L_queryCol.primary >=0 && R_queryCol.primary >= 0
-            && cmp_where.EQ() != null && cmp_on.EQ() != null
-            && tables.get(0).getPrimaryKeyNumber() == 1
-            && tables.get(1).getPrimaryKeyNumber() == 1) {
+    if (useJoin
+        && useWhere
+        && tables.size() == 2
+        && queryCol.primary >= 0
+        && L_queryCol.primary >= 0
+        && R_queryCol.primary >= 0
+        && cmp_where.EQ() != null
+        && cmp_on.EQ() != null
+        && tables.get(0).getPrimaryKeyNumber() == 1
+        && tables.get(1).getPrimaryKeyNumber() == 1) {
       ArrayList<RecordLogical> records = new ArrayList<>();
       // find record s.t. id = queryValue in table0 and table1
       for (Table.TableMetadata table : tables) {
         IndexPage rootPage =
-                (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
+            (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
         ValueWrapper[] query = {queryValue};
         Pair<Boolean, IndexPage.RecordInPage> key =
-                rootPage.scanTreeAndReturnRecord(transactionId, query);
+            rootPage.scanTreeAndReturnRecord(transactionId, query);
         if (key.left) records.add(new RecordLogical(key.right, table));
       }
       // apply projection operation

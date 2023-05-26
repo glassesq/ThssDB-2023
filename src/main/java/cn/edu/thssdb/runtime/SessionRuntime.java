@@ -125,6 +125,16 @@ public class SessionRuntime {
           response =
               new ExecuteStatementResp(StatusUtil.success("Table " + name + " created."), false);
           break;
+        case SHOW_TABLE:
+          ShowTablePlan showTablePlan = (ShowTablePlan) plan;
+          Table.TableMetadata showTable =
+              currentDatabaseMetadata.getTableByName(showTablePlan.tableName);
+          if (showTable == null)
+            return new ExecuteStatementResp(
+                StatusUtil.fail("Table " + showTablePlan.tableName + " not found."), false);
+          showTablePlan.getValue(showTable);
+          response = new ExecuteStatementResp(StatusUtil.success(showTablePlan.toString()), false);
+          break;
         case INSERT:
           InsertPlan insertPlan = (InsertPlan) plan;
           if (insertPlan.broken)
@@ -163,7 +173,6 @@ public class SessionRuntime {
               ++i;
             }
           }
-          return response;
         default:
       }
 
