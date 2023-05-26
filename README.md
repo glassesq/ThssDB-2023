@@ -56,7 +56,7 @@ For default configurations using JSON, relevant JSONObject and JSONArray shall b
 ```
 
 - [ ] 删除表：删除某张表的模式信息`` DROP TABLE tableName;``
-- [ ] 查找表：展示某张表的模式信息(每一列的名字及其数据类型，格式自定);`` SHOW TABLE tableName; ``
+- [x] 查找表：展示某张表的模式信息(每一列的名字及其数据类型，格式自定);`` SHOW TABLE tableName; ``
 
 #### 进阶要求
 
@@ -136,7 +136,7 @@ When modifying data, the transaction shall create its temporary *playground*.
 
 #### 基础要求
 
-- [ ] 经过查询模块的实现，ThssDB应当能够支持下列SQL语句（不区分大小写）：
+- [x] 经过查询模块的实现，ThssDB应当能够支持下列SQL语句（不区分大小写）：
 
 ```
 SELECT attrName1, attrName2, … attrNameN FROM tableName [WHERE attrName1 = attrValue];
