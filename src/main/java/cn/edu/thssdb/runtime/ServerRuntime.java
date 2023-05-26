@@ -51,6 +51,7 @@ public class ServerRuntime {
 
   /**
    * transaction get a lock
+   *
    * @param transactionId transaction id
    * @param lock lock
    */
@@ -61,6 +62,7 @@ public class ServerRuntime {
 
   /**
    * transaction release all locks
+   *
    * @param transactionId transaction id
    */
   public static void releaseAllLocks(long transactionId) {

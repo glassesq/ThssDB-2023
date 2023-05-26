@@ -9,7 +9,6 @@ import cn.edu.thssdb.storage.writeahead.WriteLog;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static cn.edu.thssdb.runtime.ServerRuntime.config;
