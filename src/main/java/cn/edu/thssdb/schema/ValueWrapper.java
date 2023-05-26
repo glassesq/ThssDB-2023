@@ -10,10 +10,12 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
   public byte[] bytes;
 
   /** strLength : {@code length of string bytes} */
-  private int strLength;
+  private int strLength = 0;
 
-  public boolean isNull = false;
+  public boolean isNull;
+
   public DataType type;
+
   /**
    * If this value is stored offPage; when {@code offPage} is true, value is set to the
    * corresponding pointer(spaceId, pageId);
@@ -24,6 +26,7 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
     this.bytes = new byte[column.getLength()];
     this.type = column.type;
     this.offPage = column.offPage;
+    this.isNull = true;
   }
 
   /**
@@ -31,21 +34,36 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
    *
    * @param bytes bytes to be copied
    * @param type data type
+   * @param length maximum length of the bytes (may have zero suffix).
    * @param offPage if the value is stored offPage;
    */
   public ValueWrapper(byte[] bytes, DataType type, int length, boolean offPage) {
+    this.isNull = false;
     this.bytes = Arrays.copyOf(bytes, length);
     this.type = type;
     this.offPage = offPage;
     if (this.type == DataType.STRING) {
-      this.strLength = length;
-      for (int i = 0; i < length; i++) {
+      this.strLength = Math.min(length, bytes.length);
+      for (int i = 0; i < this.strLength; i++) {
         if (bytes[i] == 0) {
           this.strLength = i;
           break;
         }
       }
     }
+  }
+
+  /**
+   * construct a null value wrapper
+   *
+   * @param isNull must be true
+   * @param type data type
+   */
+  public ValueWrapper(boolean isNull, DataType type) {
+    this.type = type;
+    this.strLength = 0;
+    this.bytes = new byte[0];
+    this.isNull = true;
   }
 
   /**
@@ -62,10 +80,10 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
   }
 
   public void setWithNull(String str) {
-    System.out.println("set with null: " + str);
     if (str.equals("null")) {
-      isNull = true;
+      this.isNull = true;
     } else {
+      this.isNull = false;
       if (str.startsWith("'") && str.endsWith("'")) {
         set(str.substring(1, str.length() - 1));
       } else {
@@ -78,6 +96,7 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
     // TODO: exception
     switch (type) {
       case INT:
+        this.bytes = new byte[4];
         int value = Integer.parseInt(string);
         bytes[0] = (byte) (value >> 24);
         bytes[1] = (byte) (value >> 16);
@@ -85,6 +104,7 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
         bytes[3] = (byte) value;
         break;
       case DOUBLE:
+        this.bytes = new byte[8];
         /* we treat different type of NaNs as the same. */
         long doubleValue = Double.doubleToLongBits(Double.parseDouble(string));
         bytes[0] = (byte) (doubleValue >> 56);
@@ -97,6 +117,7 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
         bytes[7] = (byte) doubleValue;
         break;
       case FLOAT:
+        this.bytes = new byte[4];
         int floatValue = Float.floatToIntBits(Float.parseFloat(string));
         bytes[0] = (byte) (floatValue >> 24);
         bytes[1] = (byte) (floatValue >> 16);
@@ -104,6 +125,7 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
         bytes[3] = (byte) floatValue;
         break;
       case LONG:
+        this.bytes = new byte[8];
         long longValue = Long.parseLong(string);
         bytes[0] = (byte) (longValue >> 56);
         bytes[1] = (byte) (longValue >> 48);
@@ -125,6 +147,9 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
 
   @Override
   public int compareTo(ValueWrapper o) {
+    if (isNull && o.isNull) return 0;
+    if (isNull && !o.isNull) return -1;
+    if (!isNull && o.isNull) return 1;
     switch (type) {
       case INT:
         return Integer.compare(parseIntegerBig(), o.parseIntegerBig());
@@ -137,9 +162,8 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
         return Double.compare(
             Double.longBitsToDouble(parseLongBig()), Double.longBitsToDouble((o.parseLongBig())));
       case STRING:
-        return this.toString().compareTo(o.toString());
       default:
-        return 0;
+        return this.toString().compareTo(o.toString());
     }
   }
 
@@ -183,18 +207,19 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
 
   @Override
   public String toString() {
+    if (isNull) return "null";
     switch (this.type) {
       case INT:
         return String.valueOf(parseIntegerBig());
       case LONG:
         return String.valueOf(parseLongBig());
-      case STRING:
-        return new String(bytes, 0, strLength, StandardCharsets.UTF_8);
       case DOUBLE:
         return String.valueOf(Double.longBitsToDouble(parseLongBig()));
       case FLOAT:
         return String.valueOf(Float.intBitsToFloat(parseIntegerBig()));
+      case STRING:
+      default:
+        return new String(bytes, 0, strLength, StandardCharsets.UTF_8);
     }
-    return "";
   }
 }

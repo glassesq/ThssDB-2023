@@ -135,4 +135,8 @@ public class Column {
     }
     return 0;
   }
+
+  public int getStringLength() {
+    return length;
+  }
 }
