@@ -40,20 +40,14 @@ public class DiskBuffer {
    *
    * @param spaceId spaceId
    * @param pageId pageId
-   * @return byte[] page
+   * @return Page object
    */
   public static Page read(int spaceId, int pageId) throws Exception {
-    Page page = getFromBuffer(concat(spaceId, pageId));
-    if (page == null) {
-      input(spaceId, pageId);
-      page = getFromBuffer(concat(spaceId, pageId));
-    }
-    return page;
+    return getFromBuffer(concat(spaceId, pageId));
   }
 
   /**
-   * get from buffer with diskBufferLatch Because {@code HashMap.get} and {@code HashMap.put} are
-   * not atomic, the {@code diskBufferLatch} is needed for concurrency access.
+   * get from buffer, the buffer is thread-safe
    *
    * @param key hashmap key
    * @return hashmap value
@@ -63,28 +57,13 @@ public class DiskBuffer {
   }
 
   /**
-   * put a page into disk buffer with diskBufferLatch. Because {@code HashMap.get} and {@code
-   * HashMap.put} are not atomic, the {@code diskBufferLatch} is needed for concurrency access.
+   * put page to buffer, the buffer is thread-safe
    *
    * @param page page object
    */
   public static void putToBuffer(Page page) {
     buffer.put(concat(page.spaceId, page.pageId), page);
   }
-
-  /**
-   * remove page from buffer with diskBufferLatch Because {@code HashMap.remove} is not atomic, the
-   * {@code diskBufferLatch} is needed for concurrency access.
-   *
-   * @param key hashmap key
-   */
-  /*
-  public static void removeFromBuffer(long key) {
-    diskBufferLatch.lock();
-    buffer.remove(key);
-    diskBufferLatch.unlock();
-  }
-   */
 
   /**
    * read a page from disk to buffer.
@@ -126,7 +105,7 @@ public class DiskBuffer {
   }
 
   /**
-   * write a pge from buffer to disk.
+   * write a page from buffer to disk.
    *
    * @param spaceId spaceId
    * @param pageId pageId
@@ -145,15 +124,7 @@ public class DiskBuffer {
     tablespaceFile.write(pageBytes, 0, ServerRuntime.config.pageSize);
     tablespaceFile.close();
 
-    // TODO: add condition, only discard page when necessary
-    //    removeFromBuffer(concat(spaceId, pageId));
-
     /* avoid writing and outputting page simultaneously */
     page.pageWriteAndOutputLatch.unlock();
   }
-
-  /*
-  // TODO: page discard in memory constraint scenarios
-  public void dumpPages() { }
-   */
 }
