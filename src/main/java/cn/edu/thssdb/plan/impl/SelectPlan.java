@@ -39,6 +39,7 @@ public class SelectPlan extends LogicalPlan {
     // initialize res, colInTable
     res = new QueryResult();
     colInTable = new ArrayList<>();
+    System.out.println("useWhere = " + useWhere);
     System.out.println(columns.size());
     for (SQLParser.ColumnFullNameContext column : columns) {
       res.columns.add(column.getText());
@@ -258,8 +259,10 @@ public class SelectPlan extends LogicalPlan {
     ArrayList<RecordLogical> allRecordLogical = page.right.getAllRecordLogical(transactionId).right;
     for (RecordLogical record : allRecordLogical) {
       if (useWhere)
-        if (L_where.tableName().equals(page.left.name)) {
+        if (L_where.tableName().getText().equals(page.left.name)) {
+          System.out.println(L_where.getText());
           ValueWrapper recordValue = getRecordValue(record, queryCol.primary);
+          System.out.println(recordValue.toString() + cmp_where.getText() + queryValue.toString());
           if (!checkCondition(recordValue, queryValue, cmp_where)) continue;
         }
       if (useJoin) {
