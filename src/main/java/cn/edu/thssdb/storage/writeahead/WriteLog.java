@@ -5,7 +5,7 @@ import cn.edu.thssdb.schema.Table;
 
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
+import java.util.Vector;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -134,7 +134,7 @@ public class WriteLog {
   public static final int CHECKPOINT_LOG = 1000;
 
   /** Write Ahead Log Buffer */
-  private static ArrayList<WriteLogEntry> buffer = new ArrayList<>();
+  private static Vector<WriteLogEntry> buffer = new Vector<>();
 
   /**
    * Add Common Write Log to WAL Buffer
@@ -155,7 +155,7 @@ public class WriteLog {
       int length,
       byte[] oldValue,
       byte[] newValue) {
-    writeLogBufferLatch.writeLock().lock();
+    writeLogBufferLatch.readLock().lock();
 
     WriteLogEntry entry;
     if (oldValue.length > 0) {
@@ -170,40 +170,40 @@ public class WriteLog {
     entry.type = COMMON_LOG; /* 0 for common entry */
     buffer.add(entry);
 
-    writeLogBufferLatch.writeLock().unlock();
+    writeLogBufferLatch.readLock().unlock();
   }
 
   public static void addSpecialLog(long transactionId, int type) {
-    writeLogBufferLatch.writeLock().lock();
+    writeLogBufferLatch.readLock().lock();
 
     WriteLogEntry entry = new WriteLogEntry(transactionId, type);
     buffer.add(entry);
 
-    writeLogBufferLatch.writeLock().unlock();
+    writeLogBufferLatch.readLock().unlock();
   }
 
   public static void addSpecialDatabaseLog(
       long transactionId, int type, int databaseId, byte[] databaseName) {
-    writeLogBufferLatch.writeLock().lock();
+    writeLogBufferLatch.readLock().lock();
 
     WriteLogEntry entry = new WriteLogEntry(transactionId, type);
     entry.databaseId = databaseId;
     entry.newValue = databaseName;
     buffer.add(entry);
 
-    writeLogBufferLatch.writeLock().unlock();
+    writeLogBufferLatch.readLock().unlock();
   }
 
   public static void addCreateTableLog(
       long transactionId, int databaseId, Table.TableMetadata metadata) {
-    writeLogBufferLatch.writeLock().lock();
+    writeLogBufferLatch.readLock().lock();
 
     WriteLogEntry entry = new WriteLogEntry(transactionId, CREATE_TABLE_LOG);
     entry.databaseId = databaseId;
     entry.newValue = metadata.object.toString().getBytes(StandardCharsets.UTF_8);
     buffer.add(entry);
 
-    writeLogBufferLatch.writeLock().unlock();
+    writeLogBufferLatch.readLock().unlock();
   }
 
   public static void outputWriteLogToDisk(boolean fileLatchRequired) throws Exception {

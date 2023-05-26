@@ -6,6 +6,7 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.util.HashMap;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class Database {
   public static class DatabaseMetadata {
@@ -13,6 +14,9 @@ public class Database {
     public int databaseId;
     /** spaceId to tableMetadata */
     public HashMap<Integer, Table.TableMetadata> tables = new HashMap<>();
+
+    /** lock for databaseMetadata */
+    public static ReentrantReadWriteLock metaDataLatch = new ReentrantReadWriteLock();
 
     JSONObject object;
 
@@ -47,17 +51,18 @@ public class Database {
      */
     public void createTable(long transactionId, Table.TableMetadata tableMetadata)
         throws Exception {
+      metaDataLatch.writeLock().lock();
       tables.put(tableMetadata.spaceId, tableMetadata);
       object.getJSONArray("tables").put(tableMetadata.object);
       IO.writeCreateTable(transactionId, this.databaseId, tableMetadata);
       tableMetadata.initTablespaceFile(transactionId);
       ServerRuntime.tableMetadata.put(tableMetadata.spaceId, tableMetadata);
+      metaDataLatch.writeLock().unlock();
     }
 
     /**
      * create database. ServerRuntime{@code (databaseNameLookup, databaseMetadata, metadataArray)}
-     * will be automatically updated. Corresponding changes are recorded in WAL log buffer. TODO:
-     * lock
+     * will be automatically updated. Corresponding changes are recorded in WAL log buffer.
      *
      * @param transactionId transactionId
      * @param name name of the database
@@ -66,7 +71,7 @@ public class Database {
      */
     public static DatabaseMetadata createDatabase(long transactionId, String name)
         throws Exception {
-      // TODO: lock for databaseMetadata
+      metaDataLatch.writeLock().lock();
       if (ServerRuntime.databaseNameLookup.containsKey(name)) return null;
       DatabaseMetadata metadata = new DatabaseMetadata();
       metadata.name = name;
@@ -80,16 +85,19 @@ public class Database {
       ServerRuntime.metadataArray.put(metadata.object);
       ServerRuntime.databaseNameLookup.put(name, metadata.databaseId);
       IO.writeCreateDatabase(transactionId, name, metadata.databaseId);
+      metaDataLatch.writeLock().unlock();
       return metadata;
     }
 
     public Table.TableMetadata getTableByName(String name) {
+      metaDataLatch.readLock().lock();
       // optimization
       for (Integer i : tables.keySet()) {
         if (name.equals(tables.get(i).name)) {
           return tables.get(i);
         }
       }
+      metaDataLatch.readLock().unlock();
       return null;
     }
 

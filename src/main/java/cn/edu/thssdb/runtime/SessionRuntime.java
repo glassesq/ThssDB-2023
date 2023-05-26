@@ -73,6 +73,9 @@ public class SessionRuntime {
           // not.
           // TODO: If commit failed, the transaction shall enter its abort process.
           // see also at the end of the function
+
+          // release all locks
+          ServerRuntime.releaseAllLocks(transactionId);
           return new ExecuteStatementResp(
               StatusUtil.success("The transaction has been successfully committed."), false);
         case CREATE_DATABASE:
