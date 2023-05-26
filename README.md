@@ -151,8 +151,8 @@ SELECT tableName1.AttrName1, tableName1.AttrName2…, tableName2.AttrName1, tabl
 #### 进阶要求
 
 - [ ] 应用课程中介绍的查询优化技术
-- [ ] 支持多列主键
-- [ ] 实现三张表以上的join
+- [x] 支持多列主键
+- [x] 实现三张表以上的join
 - [ ] 触发器实现
 
 ### 并发控制模块
