@@ -9,9 +9,11 @@ import org.json.JSONArray;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Lock;
 
 /**
  * The runtime of the database server. Every member variable and function shall be static in this
@@ -38,11 +40,35 @@ public class ServerRuntime {
 
   private static final AtomicLong transactionCounter = new AtomicLong(0);
 
+  /** A map from {@code transactionId} to the locks it holds. */
+  public static HashMap<Long, ArrayList<Lock>> locks = new HashMap<>();
+
   private static final AtomicInteger tablespaceCounter = new AtomicInteger(0);
 
   private static final AtomicInteger databaseCounter = new AtomicInteger(0);
   /** Configuration of the whole server. */
   public static final Configuration config = new Configuration();
+
+  /**
+   * transaction get a lock
+   * @param transactionId transaction id
+   * @param lock lock
+   */
+  public static void getLock(long transactionId, Lock lock) {
+    lock.lock();
+    locks.get(transactionId).add(lock);
+  }
+
+  /**
+   * transaction release all locks
+   * @param transactionId transaction id
+   */
+  public static void releaseAllLocks(long transactionId) {
+    for (Lock lock : locks.get(transactionId)) {
+      lock.unlock();
+    }
+    locks.remove(transactionId);
+  }
 
   /**
    * increase transaction_counter by one
@@ -56,6 +82,7 @@ public class ServerRuntime {
       throw new IllegalStateException(
           "The transaction counter is exhausted. Please restart the server. ");
     }
+    locks.put(tid, new ArrayList<>());
     return tid;
   }
 

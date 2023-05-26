@@ -3,10 +3,12 @@ package cn.edu.thssdb.storage.page;
 import cn.edu.thssdb.communication.IO;
 
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /** Basic class for all page */
 public class Page {
 
+  public ReentrantReadWriteLock pageReadAndWriteLatch = new ReentrantReadWriteLock();
   public ReentrantLock pageWriteAndOutputLatch = new ReentrantLock();
 
   /* FIL Header */
@@ -41,7 +43,7 @@ public class Page {
   protected int nextPageId;
 
   /** the type of current page. OVERALL(0), EXTENT_MANAGE(1), INDEX_ROOT(2), DATA(3), */
-  int pageType;
+  public int pageType;
 
   public static final int OVERALL_PAGE = 0;
   public static final int EXTENT_MANAGE_PAGE = 1;

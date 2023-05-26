@@ -10,6 +10,7 @@ import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static cn.edu.thssdb.runtime.ServerRuntime.config;
 import static cn.edu.thssdb.storage.writeahead.WriteLog.*;
@@ -17,7 +18,7 @@ import static cn.edu.thssdb.storage.writeahead.WriteLog.*;
 public class IO {
   static HashSet<Long> dirtyPages = new HashSet<>();
 
-  static ReentrantLock dirtyPageLatch = new ReentrantLock();
+  static ReentrantReadWriteLock dirtyPageLatch = new ReentrantReadWriteLock();
 
   /**
    * This method can be used safely due to the presence of locks.
@@ -49,7 +50,7 @@ public class IO {
     /* Write the changes to disk buffer */
     /* Latch for page reading is not needed because of our design avoid reading from bytes directly. */
 
-    dirtyPageLatch.lock();
+    dirtyPageLatch.readLock().lock();
     /* avoid writing and outputting page simultaneously */
     page.pageWriteAndOutputLatch.lock();
 
@@ -80,7 +81,7 @@ public class IO {
     /* we slightly delay the release of this latch. This is to avoid reversing of the Write-ahead log's order. */
     page.pageWriteAndOutputLatch.unlock();
 
-    dirtyPageLatch.unlock();
+    dirtyPageLatch.readLock().unlock();
   }
 
   /** Push every log in WAL buffer and mark relevant pages as dirty. */
@@ -98,7 +99,7 @@ public class IO {
     writeLogFileLatch.lock();
 
     /* make sure there will be no writing logs here. */
-    dirtyPageLatch.lock();
+    dirtyPageLatch.writeLock().lock();
 
     HashSet<Long> shadows = new HashSet<>(dirtyPages);
     for (Long spId : shadows) {
@@ -108,7 +109,7 @@ public class IO {
 
     WriteLog.outputWriteLogToDisk(false);
 
-    dirtyPageLatch.unlock();
+    dirtyPageLatch.writeLock().unlock();
 
     /* output all dirty relevant pages to disk */
     for (Long spId : shadows) {
