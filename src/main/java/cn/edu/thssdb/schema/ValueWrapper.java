@@ -9,7 +9,9 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
   /** raw bytes value */
   public byte[] bytes;
 
+  /** strLength : {@code length of string bytes} */
   private int strLength;
+
   public boolean isNull = false;
   public DataType type;
   /**
@@ -65,14 +67,7 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
       isNull = true;
     } else {
       if (str.startsWith("'") && str.endsWith("'")) {
-        StringBuilder builder = new StringBuilder(str.substring(1, str.length() - 1));
-        /*
-        int add = (bytes.length / ServerRuntime.config.maxCharsetLength) - (str.length() - 2);
-        System.out.println(bytes.length);
-        System.out.println("add:" + add);
-        for (int i = 0; i < add; i++) builder.append(" ");
-        set(builder.toString());
-        */
+        set(str.substring(1, str.length() - 1));
       } else {
         set(str);
       }
@@ -121,7 +116,7 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
         break;
       case STRING:
         byte[] stringBytes = string.getBytes(StandardCharsets.UTF_8);
-        this.bytes = new byte[this.bytes.length];
+        this.bytes = new byte[stringBytes.length];
         System.arraycopy(stringBytes, 0, bytes, 0, stringBytes.length);
         strLength = stringBytes.length;
         break;
@@ -194,7 +189,6 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
       case LONG:
         return String.valueOf(parseLongBig());
       case STRING:
-        System.out.println(strLength);
         return new String(bytes, 0, strLength, StandardCharsets.UTF_8);
       case DOUBLE:
         return String.valueOf(Double.longBitsToDouble(parseLongBig()));

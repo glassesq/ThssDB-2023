@@ -674,6 +674,7 @@ public class IndexPage extends Page {
     ArrayList<Integer> primaryOffsetList = metadata.getPrimaryOffsetInOrder();
     ArrayList<Integer> nonPrimaryKeyOffsetList = metadata.getNonPrimaryKeyOffsetInOrder();
 
+    record.primaryKeys = new byte[metadata.getPrimaryKeyLength()];
     for (int i = 0; i < primaryKeyNumber; i++) {
       record.primaryKeyValues[i] = new ValueWrapper(recordToBeInserted.primaryKeyValues[i]);
       System.arraycopy(
@@ -684,6 +685,7 @@ public class IndexPage extends Page {
           recordToBeInserted.primaryKeyValues[i].bytes.length);
     }
 
+    record.nonPrimaryKeys = new byte[metadata.getNonPrimaryKeyLength()];
     for (int i = 0; i < nonPrimaryKeyNumber; i++) {
       record.nonPrimaryKeyValues[i] = new ValueWrapper(recordToBeInserted.nonPrimaryKeyValues[i]);
       System.arraycopy(
