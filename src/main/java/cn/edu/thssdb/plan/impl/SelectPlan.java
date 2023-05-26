@@ -35,17 +35,17 @@ public class SelectPlan extends LogicalPlan {
   public long transactionId = -1;
 
   public void initialization(ArrayList<Table.TableMetadata> tables) {
-    System.out.println("initailization start");
+    System.out.println("initialization start");
+    // initialize res, colInTable
     res = new QueryResult();
     colInTable = new ArrayList<>();
     System.out.println(columns.size());
     for (SQLParser.ColumnFullNameContext column : columns) {
       res.columns.add(column.getText());
+      System.out.print(column.getText() + ',');
       for (Table.TableMetadata table : tables) {
-        System.out.println(table.name);
         if (tables.size() == 1 || table.name.equals(column.tableName().getText())) {
           String keyName = column.columnName().getText();
-          System.out.println(column.getText());
           if (table.columnNames.get(keyName) == null)
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + table.name + "'");
@@ -55,7 +55,8 @@ public class SelectPlan extends LogicalPlan {
         }
       }
     }
-    System.out.println("init-1");
+    System.out.println("\nphase 1 over");
+    // initialize L_index, R_index, L_queryCol, R_queryCol
     Table.TableMetadata table = !useJoin ? tables.get(0) : null;
     int i = 0;
     for (Table.TableMetadata t : tables) {
@@ -80,8 +81,9 @@ public class SelectPlan extends LogicalPlan {
       }
       ++i;
     }
+    System.out.println("phase 2 over");
     if (!useWhere) return;
-
+    // initialize queryCol, queryValue
     String keyName = L_where.columnName().getText();
     if (table == null)
       throw new IllegalArgumentException(
@@ -99,36 +101,30 @@ public class SelectPlan extends LogicalPlan {
     ArrayList<String> result = new ArrayList<>();
     System.out.println("---Proj---");
     System.out.println(columns.size());
-    for (int i = 0; i < columns.size(); ++i) {
-      int col = colInTable.get(i).primary;
-      if (col >= 0) result.add(record.primaryKeyValues[col].toString());
-      else result.add(record.nonPrimaryKeyValues[-col - 1].toString());
-    }
+    for (int i = 0; i < columns.size(); ++i)
+      result.add(getRecordValue(record, colInTable.get(i).primary).toString());
     System.out.println("+++Proj+++");
     return result;
   }
 
-  // 无JOIN的情况
-  // 单列主键，且WHERE子句查询主键时，使用如下方法进行查询
+  // useJoin = false
   public QueryResult getLess(Table.TableMetadata table) throws Exception {
     IndexPage rootPage =
         (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
     Pair<Integer, ArrayList<RecordLogical>> pageIter = rootPage.getLeftmostDataPage(transactionId);
 
-    if (pageIter.left == 0) {
-      if (addRowsWithLess(pageIter, table)) return res;
-    } else {
+    if (pageIter.left == 0) addRowsWithLess(pageIter);
+    else {
       do {
         IndexPage page = (IndexPage) IO.read(table.spaceId, pageIter.left);
         pageIter = page.getAllRecordLogical(transactionId);
-        if (addRowsWithLess(pageIter, table)) return res;
+        if (addRowsWithLess(pageIter)) return res;
       } while (pageIter.left > 0);
     }
     return res;
   }
 
-  private boolean addRowsWithLess(
-      Pair<Integer, ArrayList<RecordLogical>> pageIter, Table.TableMetadata table) {
+  private boolean addRowsWithLess(Pair<Integer, ArrayList<RecordLogical>> pageIter) {
     for (RecordLogical record : pageIter.right) {
       if (record.primaryKeyValues[0].compareTo(queryValue) < 0)
         res.rows.add(applyProjection(record));
@@ -176,15 +172,14 @@ public class SelectPlan extends LogicalPlan {
     if (cmp.GE() != null && A.compareTo(B) >= 0) return true;
     return cmp.GT() != null && A.compareTo(B) > 0;
   }
-  // 多列主键/非主键/单列主键，查询不等于
+
   public QueryResult getCondition(Table.TableMetadata table) throws Exception {
-    System.out.println("getCondtion!");
+    System.out.println("getCondition");
     IndexPage rootPage =
         (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
     Pair<Integer, ArrayList<RecordLogical>> pageIter = rootPage.getLeftmostDataPage(transactionId);
-    if (pageIter.left == 0) {
-      addRowsWithCondition(pageIter, table);
-    } else {
+    if (pageIter.left == 0) addRowsWithCondition(pageIter, table);
+    else {
       do {
         IndexPage page = (IndexPage) IO.read(table.spaceId, pageIter.left);
         pageIter = page.getAllRecordLogical(transactionId);
@@ -194,21 +189,23 @@ public class SelectPlan extends LogicalPlan {
     return res;
   }
 
+  public ValueWrapper getRecordValue(RecordLogical record, int primary) {
+    return primary < 0
+        ? record.nonPrimaryKeyValues[-primary - 1]
+        : record.primaryKeyValues[primary];
+  }
+
   private void addRowsWithCondition(
       Pair<Integer, ArrayList<RecordLogical>> pageIter, Table.TableMetadata table) {
     for (RecordLogical record : pageIter.right) {
-      if (useWhere) {
-        ValueWrapper recordValue =
-            queryCol.primary < 0
-                ? record.nonPrimaryKeyValues[-queryCol.primary - 1]
-                : record.primaryKeyValues[queryCol.primary];
-        if (!checkCondition(recordValue, queryValue, cmp_where)) continue; // 不满足条件
-      }
+      if (useWhere
+          && !checkCondition(getRecordValue(record, queryCol.primary), queryValue, cmp_where))
+        continue;
       res.rows.add(applyProjection(record));
     }
   }
 
-  // 有JOIN的情况
+  // useJoin = true
   public void enumPages(
       ArrayList<Table.TableMetadata> tables,
       int iter,
@@ -245,15 +242,15 @@ public class SelectPlan extends LogicalPlan {
       ArrayList<Pair<Table.TableMetadata, RecordLogical>> records) {
     if (iter == pages.size()) {
       ArrayList<String> result = new ArrayList<>();
-      for (SQLParser.ColumnFullNameContext column : columns)
-        for (Pair<Table.TableMetadata, RecordLogical> record : records) {
-          Table.TableMetadata table = record.left;
-          if (table.name.equals(column.tableName().getText())) {
-            Column col = table.getColumnDetailByName(column.columnName().getText());
-            if (col.primary >= 0) result.add(record.right.primaryKeyValues[col.primary].toString());
-            else result.add(record.right.nonPrimaryKeyValues[-col.primary - 1].toString());
+      int i = 0;
+      for (SQLParser.ColumnFullNameContext column : columns) {
+        for (Pair<Table.TableMetadata, RecordLogical> record : records)
+          if (record.left.name.equals(column.tableName().getText())) {
+            result.add(getRecordValue(record.right, colInTable.get(i).primary).toString());
+            break;
           }
-        }
+        ++i;
+      }
       res.rows.add(result);
       return;
     }
@@ -262,10 +259,7 @@ public class SelectPlan extends LogicalPlan {
     for (RecordLogical record : allRecordLogical) {
       if (useWhere)
         if (L_where.tableName().equals(page.left.name)) {
-          ValueWrapper recordValue =
-              queryCol.primary < 0
-                  ? record.nonPrimaryKeyValues[-queryCol.primary - 1]
-                  : record.primaryKeyValues[queryCol.primary];
+          ValueWrapper recordValue = getRecordValue(record, queryCol.primary);
           if (!checkCondition(recordValue, queryValue, cmp_where)) continue;
         }
       if (useJoin) {
@@ -274,14 +268,8 @@ public class SelectPlan extends LogicalPlan {
           RecordLogical L_record = records.get(L_index).right,
               R_record = records.get(R_index).right;
           records.remove(iter);
-          ValueWrapper L_Value =
-              L_queryCol.primary < 0
-                  ? L_record.nonPrimaryKeyValues[-L_queryCol.primary - 1]
-                  : L_record.primaryKeyValues[L_queryCol.primary];
-          ValueWrapper R_Value =
-              R_queryCol.primary < 0
-                  ? R_record.nonPrimaryKeyValues[-R_queryCol.primary - 1]
-                  : R_record.primaryKeyValues[R_queryCol.primary];
+          ValueWrapper L_Value = getRecordValue(L_record, L_queryCol.primary);
+          ValueWrapper R_Value = getRecordValue(R_record, R_queryCol.primary);
           if (!checkCondition(L_Value, R_Value, cmp_on)) continue;
         }
       }
