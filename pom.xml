@@ -103,6 +103,7 @@
                         <configuration>
                             <excludes>
                                 <exclude>**/*Test.java</exclude>
+                                <exclude>**/benchmark/*.java</exclude>
                             </excludes>
                             <includes>
                                 <include>**/*TestLimited.java</include>
@@ -123,6 +124,7 @@
                             </includes>
                             <excludes>
                                 <exclude>**/*TestLimited.java</exclude>
+                                <exclude>**/benchmark/*.java</exclude>
                             </excludes>
                         </configuration>
                         <goals>
