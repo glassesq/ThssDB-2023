@@ -4,47 +4,53 @@ import cn.edu.thssdb.benchmark.common.Client;
 import cn.edu.thssdb.benchmark.common.Constants;
 import cn.edu.thssdb.benchmark.common.TableSchema;
 import cn.edu.thssdb.benchmark.generator.BaseDataGenerator;
+import cn.edu.thssdb.benchmark.generator.OperationGenerator;
 import cn.edu.thssdb.benchmark.generator.PerformanceDataGenerator;
+import cn.edu.thssdb.benchmark.transaction.OperationType;
+import cn.edu.thssdb.benchmark.transaction.Transaction;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import com.clearspring.analytics.stream.quantile.TDigest;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.thrift.TException;
 import org.junit.Assert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 
 public class PerformanceTestExecutor extends TestExecutor {
-
   private static final Logger LOGGER = LoggerFactory.getLogger(PerformanceTestExecutor.class);
-  private static final int CONCURRENT_NUMBER = Constants.tableCount;
-  private static final int WRITE_ROW_NUMBER = 10;
-  private static final int COMPRESSION = 3000;
   private static final int DATA_SEED = 667;
-  // 性能测试执行次数
-  public static final int LOOP = 10;
-  // 读写混合比例
-  public static final double WRITE_RATIO = 0.5;
-  private BaseDataGenerator dataGenerator;
-  private Map<String, TableSchema> schemaMap;
+  private static final Map<OperationType, TDigest> transactionLatencyDigest =
+      new EnumMap<>(OperationType.class);
   private List<Client> clients;
-  private Random random = new Random(DATA_SEED);
-  private static final Map<Operation, TDigest> operationLatencyDigest =
-      new EnumMap<>(Operation.class);
-  private Map<Integer, Measurement> measurements = new HashMap<>();
+  private Map<Integer, PerformanceTestExecutor.Measurement> measurements = new HashMap<>();
+  private int CLIENT_NUMBER = 5;
+  private int TABLE_NUMBER = 3;
+  private int OPERATION_NUMBER = 100;
+  private String OPERATION_RATIO = "80:5:5:5:5";
+
+  BaseDataGenerator dataGenerator;
+  WeightedRandomPicker weightedRandomPicker;
 
   public PerformanceTestExecutor() throws TException {
-    dataGenerator = new PerformanceDataGenerator();
-    schemaMap = dataGenerator.getSchemaMap();
+    dataGenerator = new PerformanceDataGenerator(TABLE_NUMBER);
+    weightedRandomPicker =
+        new WeightedRandomPicker(
+            Arrays.stream(OPERATION_RATIO.split(":")).mapToInt(Integer::parseInt).toArray());
     clients = new ArrayList<>();
-    for (Operation operation : Operation.values()) {
-      operationLatencyDigest.put(operation, new TDigest(COMPRESSION, new Random(DATA_SEED)));
+    for (OperationType type : OperationType.values()) {
+      transactionLatencyDigest.put(type, new TDigest(3000, new Random(DATA_SEED)));
     }
-    for (int number = 0; number < CONCURRENT_NUMBER; number++) {
+    for (int number = 0; number < CLIENT_NUMBER; number++) {
       clients.add(new Client());
-      measurements.put(number, new Measurement());
+      measurements.put(number, new PerformanceTestExecutor.Measurement());
     }
   }
 
@@ -55,33 +61,37 @@ public class PerformanceTestExecutor extends TestExecutor {
     // make sure database not exist, it's ok to ignore the error
     ExecuteStatementResp resp1 = schemaClient.executeStatement("create database db_performance;");
     Assert.assertEquals(Constants.SUCCESS_STATUS_CODE, resp1.status.code);
-    LOGGER.info("Create database db_concurrent finished");
-    for (int i = 0; i < CONCURRENT_NUMBER; i++) {
+    LOGGER.info("Create database db_performance finished");
+    for (int i = 0; i < CLIENT_NUMBER; i++) {
       Client client = clients.get(i);
       ExecuteStatementResp resp2 = client.executeStatement("use db_performance;");
       Assert.assertEquals(Constants.SUCCESS_STATUS_CODE, resp2.status.code);
       LOGGER.info("Client-" + i + " use db_performance finished");
-      createTable(schemaMap.get("test_table" + i), client);
+    }
+    for (TableSchema tableSchema : dataGenerator.getSchemaMap().values()) {
+      createTable(tableSchema, clients.get(0));
     }
     // performance test
     List<CompletableFuture<Void>> futures = new ArrayList<>();
-    for (int i = 0; i < CONCURRENT_NUMBER; i++) {
+    for (int i = 0; i < CLIENT_NUMBER; i++) {
       int index = i;
       CompletableFuture<Void> completableFuture =
           CompletableFuture.runAsync(
               () -> {
                 try {
+                  OperationGenerator operationGenerator =
+                      new OperationGenerator(dataGenerator, DATA_SEED);
                   LOGGER.info("Start Performance Test for Client-" + index);
                   Client client = clients.get(index);
-                  Measurement measurement = measurements.get(index);
-                  TableSchema tableSchema = schemaMap.get("test_table" + index);
-                  for (int m = 0; m < LOOP; m++) {
-                    double randomValue = random.nextDouble();
-                    if (randomValue < WRITE_RATIO) {
-                      doWriteOperation(measurement, m, tableSchema, client);
-                    } else {
-                      doQueryOperation(measurement, tableSchema, client);
-                    }
+                  PerformanceTestExecutor.Measurement measurement = measurements.get(index);
+                  for (int m = 0; m < OPERATION_NUMBER; m++) {
+                    OperationType type = OperationType.values()[weightedRandomPicker.getNext()];
+                    Transaction transaction = operationGenerator.generateTransaction(type);
+                    long startTime = System.nanoTime();
+                    transaction.execute(client);
+                    long finishTime = System.nanoTime();
+                    // Assert.assertEquals(Constants.SUCCESS_STATUS_CODE, resp.status.code);
+                    measurement.record(type, transaction.getSize(), finishTime - startTime);
                   }
                   LOGGER.info("Finish Performance Test for Client-" + index);
                 } catch (Exception e) {
@@ -93,65 +103,22 @@ public class PerformanceTestExecutor extends TestExecutor {
     CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
     // calculate measurement
     List<Double> quantiles = Arrays.asList(0.0, 0.25, 0.5, 0.75, 0.9, 0.99, 1.0);
-    for (Operation operation : Operation.values()) {
-      TDigest digest = operationLatencyDigest.get(operation);
+    for (OperationType type : OperationType.values()) {
+      TDigest digest = transactionLatencyDigest.get(type);
       double totalLatency = 0.0;
       long totalNumber = 0;
       long totalPoint = 0;
       for (Double quantile : quantiles) {
-        LOGGER.info(operation + "-" + quantile + ": " + (digest.quantile(quantile) / 1e6) + " ms");
+        LOGGER.info(type + "-" + quantile + ": " + (digest.quantile(quantile) / 1e6) + " ms");
       }
-      for (Measurement measurement : measurements.values()) {
-        totalLatency += measurement.getOperationLatencySumThisClient().get(operation);
-        totalPoint += measurement.getOkPointNumMap().get(operation);
-        totalNumber += measurement.getOkOperationNumMap().get(operation);
+      for (PerformanceTestExecutor.Measurement measurement : measurements.values()) {
+        totalLatency += measurement.gettransactionLatencySumThisClient().get(type);
+        totalPoint += measurement.getOkSQLNumMap().get(type);
+        totalNumber += measurement.getOktransactionNumMap().get(type);
       }
-      LOGGER.info(operation + " per second: " + (totalNumber / (totalLatency / 1e9)));
-      LOGGER.info(operation + " points per second: " + (totalPoint / (totalLatency / 1e9)));
+      LOGGER.info(type + " per second: " + (totalNumber / (totalLatency / 1e9)));
+      LOGGER.info(type + " sql per second: " + (totalPoint / (totalLatency / 1e9)));
     }
-  }
-
-  private void doWriteOperation(
-      Measurement measurement, int loop, TableSchema tableSchema, Client client) throws TException {
-    String tableName = tableSchema.tableName;
-    for (int rowid = 0; rowid < WRITE_ROW_NUMBER; rowid++) {
-      List<String> columns = new ArrayList<>();
-      List<Object> data = new ArrayList<>();
-      for (int columnId = 0; columnId < tableSchema.columns.size(); columnId++) {
-        Object dataItem =
-            dataGenerator.generateValue(tableName, loop * WRITE_ROW_NUMBER + rowid, columnId);
-        if (dataItem != null) {
-          columns.add(tableSchema.columns.get(columnId));
-          data.add(dataItem);
-        }
-      }
-      String sql =
-          "Insert into "
-              + tableName
-              + "("
-              + StringUtils.join(columns, ",")
-              + ")"
-              + " values("
-              + StringUtils.join(data, ",")
-              + ");";
-      long startTime = System.nanoTime();
-      ExecuteStatementResp resp = client.executeStatement(sql);
-      long finishTime = System.nanoTime();
-      Assert.assertEquals(Constants.SUCCESS_STATUS_CODE, resp.status.code);
-      measurement.record(
-          Operation.WRITE, WRITE_ROW_NUMBER * tableSchema.columns.size(), finishTime - startTime);
-    }
-  }
-
-  private void doQueryOperation(Measurement measurement, TableSchema tableSchema, Client client)
-      throws TException {
-    String querySql = "select * from " + tableSchema.tableName + ";";
-    long startTime = System.nanoTime();
-    ExecuteStatementResp resp = client.executeStatement(querySql);
-    long finishTime = System.nanoTime();
-    Assert.assertEquals(Constants.SUCCESS_STATUS_CODE, resp.status.code);
-    measurement.record(
-        Operation.QUERY, resp.rowList.size() * tableSchema.columns.size(), finishTime - startTime);
   }
 
   @Override
@@ -169,46 +136,74 @@ public class PerformanceTestExecutor extends TestExecutor {
   }
 
   private class Measurement {
-    private final Map<Operation, Double> operationLatencySumThisClient;
-    private final Map<Operation, Long> okOperationNumMap;
-    private final Map<Operation, Long> okPointNumMap;
+    private final Map<OperationType, Double> transactionLatencySumThisClient;
+    private final Map<OperationType, Long> oktransactionNumMap;
+    private final Map<OperationType, Long> okSQLNumMap;
 
     public Measurement() {
-      operationLatencySumThisClient = new EnumMap<>(Operation.class);
-      okOperationNumMap = new EnumMap<>(Operation.class);
-      okPointNumMap = new EnumMap<>(Operation.class);
-      for (Operation operation : Operation.values()) {
-        operationLatencySumThisClient.put(operation, 0.0);
-        okOperationNumMap.put(operation, 0L);
-        okPointNumMap.put(operation, 0L);
+      transactionLatencySumThisClient = new EnumMap<>(OperationType.class);
+      oktransactionNumMap = new EnumMap<>(OperationType.class);
+      okSQLNumMap = new EnumMap<>(OperationType.class);
+      for (OperationType transaction : OperationType.values()) {
+        transactionLatencySumThisClient.put(transaction, 0.0);
+        oktransactionNumMap.put(transaction, 0L);
+        okSQLNumMap.put(transaction, 0L);
       }
     }
 
-    public void record(Operation operation, int size, long latency) {
-      synchronized (operationLatencyDigest.get(operation)) {
-        operationLatencyDigest.get(operation).add(latency);
+    public void record(OperationType transaction, int size, long latency) {
+      synchronized (transactionLatencyDigest.get(transaction)) {
+        transactionLatencyDigest.get(transaction).add(latency);
       }
-      operationLatencySumThisClient.put(
-          operation, operationLatencySumThisClient.get(operation) + latency);
-      okOperationNumMap.put(operation, okOperationNumMap.get(operation) + 1);
-      okPointNumMap.put(operation, okPointNumMap.get(operation) + size);
+      transactionLatencySumThisClient.put(
+          transaction, transactionLatencySumThisClient.get(transaction) + latency);
+      oktransactionNumMap.put(transaction, oktransactionNumMap.get(transaction) + 1);
+      okSQLNumMap.put(transaction, okSQLNumMap.get(transaction) + size);
     }
 
-    public Map<Operation, Double> getOperationLatencySumThisClient() {
-      return operationLatencySumThisClient;
+    public Map<OperationType, Double> gettransactionLatencySumThisClient() {
+      return transactionLatencySumThisClient;
     }
 
-    public Map<Operation, Long> getOkOperationNumMap() {
-      return okOperationNumMap;
+    public Map<OperationType, Long> getOktransactionNumMap() {
+      return oktransactionNumMap;
     }
 
-    public Map<Operation, Long> getOkPointNumMap() {
-      return okPointNumMap;
+    public Map<OperationType, Long> getOkSQLNumMap() {
+      return okSQLNumMap;
     }
   }
 
-  private enum Operation {
-    WRITE,
-    QUERY
+  public class WeightedRandomPicker {
+
+    private final int[] weightCounter;
+    private final Random random;
+    private int weightSum;
+
+    public WeightedRandomPicker(int[] weights) {
+      // this.weights = weights;
+      this.random = new Random();
+
+      for (int weight : weights) {
+        weightSum += weight;
+      }
+
+      this.weightCounter = new int[weights.length];
+      weightCounter[0] = weights[0];
+      for (int i = 1; i < weights.length; i++) {
+        weightCounter[i] += weightCounter[i - 1] + weights[i];
+      }
+    }
+
+    public int getNext() {
+      float randomNumber = random.nextFloat() * weightSum;
+      for (int i = 0; i < weightCounter.length; i++) {
+        if (randomNumber <= weightCounter[i]) {
+          return i;
+        }
+      }
+
+      return weightCounter.length - 1;
+    }
   }
 }

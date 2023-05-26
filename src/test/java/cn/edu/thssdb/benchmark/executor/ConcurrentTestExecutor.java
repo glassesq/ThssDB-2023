@@ -104,7 +104,7 @@ public class ConcurrentTestExecutor extends TestExecutor {
   @Override
   public void close() {
     try {
-      client1.executeStatement("drop database db_transaction");
+      client1.executeStatement("drop database db_concurrent");
     } catch (TException e) {
       LOGGER.error("{}", e.getMessage(), e);
     }

@@ -24,7 +24,8 @@ public class PerformanceTest {
   }
 
   @Test
-  public void performanceTest() throws TException {
+  public void simpleTest() throws TException {
+    // create database
     LOGGER.info("======================== Performance test  ======================== ");
     performanceTestExecutor.test();
   }

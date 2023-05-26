@@ -155,7 +155,7 @@ public class CRUDTestExecutor extends TestExecutor {
 
     // query join on column1
     querySql =
-        "select column1,test_table3.column2,test_table4.column2 from test_table3 join test_table4 on test_table3.column1 = test_table4.column1;";
+        "select test_table3.column1,test_table3.column2,test_table4.column2 from test_table3 join test_table4 on test_table3.column1 = test_table4.column1;";
     resp = client.executeStatement(querySql);
     tableSchema = dataGenerator.getTableSchema("test_table3");
     resultTypes.clear();
@@ -185,7 +185,7 @@ public class CRUDTestExecutor extends TestExecutor {
 
     // query join on column1 where column1 = 5;
     querySql =
-        "select column1,test_table3.column2,test_table4.column2 from test_table3 join test_table4 on test_table3.column1 = test_table4.column1 where column1 = 5;";
+        "select test_table3.column1,test_table3.column2,test_table4.column2 from test_table3 join test_table4 on test_table3.column1 = test_table4.column1 where test_table3.column1 = 5;";
     resp = client.executeStatement(querySql);
     tableSchema = dataGenerator.getTableSchema("test_table3");
     resultTypes.clear();
@@ -214,7 +214,7 @@ public class CRUDTestExecutor extends TestExecutor {
     Assert.assertTrue(equals(queryResult, expectedResult));
     // query join on column1 where column3 = 5;
     querySql =
-        "select column1,test_table3.column3,test_table4.column2 from test_table3 join test_table4 on test_table3.column1 = test_table4.column1 where test_table3.column3 = 5;";
+        "select test_table3.column1,test_table3.column3,test_table4.column2 from test_table3 join test_table4 on test_table3.column1 = test_table4.column1 where test_table3.column3 = 5;";
     resp = client.executeStatement(querySql);
     tableSchema = dataGenerator.getTableSchema("test_table3");
     resultTypes.clear();
