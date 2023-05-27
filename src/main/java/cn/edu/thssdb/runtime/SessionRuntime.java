@@ -68,14 +68,14 @@ public class SessionRuntime {
       switch (plan.getType()) {
         case COMMIT:
           IO.pushTransactionCommit(transactionId);
+          // release all locks
+          ServerRuntime.releaseAllLocks(transactionId);
           transactionId = -1;
           // Commit statement shall be treated as the end of transaction. No matter it succeeds or
           // not.
           // TODO: If commit failed, the transaction shall enter its abort process.
           // see also at the end of the function
 
-          // release all locks
-          ServerRuntime.releaseAllLocks(transactionId);
           return new ExecuteStatementResp(
               StatusUtil.success("The transaction has been successfully committed."), false);
         case CREATE_DATABASE:
@@ -98,6 +98,8 @@ public class SessionRuntime {
       if (response != null) {
         if (ServerRuntime.config.auto_commit) {
           IO.pushTransactionCommit(transactionId);
+          // release all locks
+          ServerRuntime.releaseAllLocks(transactionId);
           transactionId = -1;
           response.status.msg =
               response.status.msg + "\n\nEnd of the transaction.(auto commit on).";
@@ -183,6 +185,9 @@ public class SessionRuntime {
           // TODO: Suitable validation should be introduced.
           // If only NOT NULL as well as PRIMARY KEY constraints are implemented, we can sacrifice
           // functionality for performance.
+
+          // release all locks
+          ServerRuntime.releaseAllLocks(transactionId);
           transactionId = -1;
           response.status.msg =
               response.status.msg + "\n\nEnd of the transaction.(auto commit on).";

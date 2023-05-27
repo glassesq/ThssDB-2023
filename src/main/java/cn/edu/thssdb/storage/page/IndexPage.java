@@ -1344,7 +1344,7 @@ public class IndexPage extends Page {
    *     explained above.
    */
   public Pair<Boolean, RecordInPage> scanInternal(long transactionId, ValueWrapper[] searchKey) {
-//    ServerRuntime.getReadLock(transactionId, this.pageReadAndWriteLatch);
+    //    ServerRuntime.getReadLock(transactionId, this.pageReadAndWriteLatch);
     RecordInPage record = infimumRecord.nextRecordInPage;
     RecordInPage previousRecord = infimumRecord;
     while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
@@ -1359,10 +1359,10 @@ public class IndexPage extends Page {
       record = record.nextRecordInPage;
     }
     if (record.nextAbsoluteOffset == 0) {
-//      ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
+      //      ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
       return new Pair<>(false, previousRecord);
     } else {
-//      ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
+      //      ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
       return new Pair<>(false, record);
     }
   }
