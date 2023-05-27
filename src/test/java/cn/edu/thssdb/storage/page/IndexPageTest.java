@@ -60,7 +60,159 @@ public class IndexPageTest {
   }
 
   @Test
-  public void testRecordInPageNotSplit() throws Exception {
+  public void testSplitDataPageAfterRootIsSplitSingleThread() throws Exception {
+    DataType[] types = new DataType[5];
+    types[0] = DataType.INT;
+    types[1] = DataType.STRING;
+    types[2] = DataType.FLOAT;
+    types[3] = DataType.LONG;
+    types[4] = DataType.DOUBLE;
+
+    Table.TableMetadata tableMetadata = new Table.TableMetadata();
+    tableMetadata.prepare("testSplitDataPageAfterRootIsSplit", ServerRuntime.newTablespace());
+    ArrayList<Column> columns = new ArrayList<>();
+    ArrayList<String> names = new ArrayList<>();
+    ArrayList<Integer> orders = new ArrayList<>();
+    int primaryKeyNumber = 10;
+    int nonPrimaryKeyNumber = 10;
+    for (int i = 0; i < primaryKeyNumber + nonPrimaryKeyNumber; i++) {
+      Column column = new Column();
+      String columnName = "column" + String.valueOf(i - nonPrimaryKeyNumber);
+      column.prepare(
+          columnName,
+          types[ThreadLocalRandom.current().nextInt(types.length)],
+          ThreadLocalRandom.current().nextInt(20) + 1);
+      column.setPrimaryKey(i - nonPrimaryKeyNumber);
+      names.add(columnName);
+      columns.add(column);
+      orders.add(i - nonPrimaryKeyNumber);
+    }
+    tableMetadata.setColumnsAndCompute(
+        names, columns, orders, primaryKeyNumber, nonPrimaryKeyNumber);
+
+    System.out.println(
+        "max record size:"
+            + tableMetadata.getMaxRecordLength(IndexPage.RecordInPage.USER_DATA_RECORD));
+    assertTrue(
+        2 * tableMetadata.getMaxRecordLength(IndexPage.RecordInPage.USER_DATA_RECORD)
+            < ServerRuntime.config.pageSize - 64);
+
+    long transactionId = ServerRuntime.newTransaction();
+
+    currentDatabase.createTable(transactionId, tableMetadata);
+
+    IndexPage rootPage =
+        (IndexPage) IO.read(tableMetadata.spaceId, ServerRuntime.config.indexRootPageIndex);
+
+    ArrayList<RecordLogical> recordsInRoot = new ArrayList<>();
+
+    for (int time = 0; time < 1024; time++) {
+      RecordLogical record = new RecordLogical(tableMetadata);
+      for (int i = 0; i < record.primaryKeyValues.length; i++) {
+        Pair<String, ValueWrapper> r =
+            ValueWrapperTest.createSingleValueWrapperRandomly(
+                tableMetadata.getColumnDetailByOrderInType(i, true));
+        while (r.right.isNull)
+          r =
+              ValueWrapperTest.createSingleValueWrapperRandomly(
+                  tableMetadata.getColumnDetailByOrderInType(i, true));
+        record.primaryKeyValues[i] = r.right;
+      }
+      for (int i = 0; i < record.nonPrimaryKeyValues.length; i++) {
+        Pair<String, ValueWrapper> r =
+            ValueWrapperTest.createSingleValueWrapperRandomly(
+                tableMetadata.getColumnDetailByOrderInType(i, false));
+        record.nonPrimaryKeyValues[i] = r.right;
+      }
+
+      IndexPage.RecordInPage recordInPage =
+          IndexPage.makeRecordInPageFromLogical(record, tableMetadata);
+
+      Pair<Boolean, IndexPage.RecordInPage> insertPos =
+          rootPage.scanTreeAndReturnRecord(transactionId, recordInPage.primaryKeyValues);
+      if (insertPos.left) continue;
+
+      rootPage.insertDataRecordIntoTree(transactionId, record);
+      recordsInRoot.add(record);
+
+      Pair<Integer, ArrayList<RecordLogical>> dataResult =
+          rootPage.getLeftmostDataPage(transactionId);
+      if (dataResult.left.intValue() == 0) {
+        continue;
+      }
+      assertNotEquals(dataResult.left.intValue(), 0);
+
+      insertPos = rootPage.scanTreeAndReturnRecord(transactionId, record.primaryKeyValues);
+
+      assertTrue(insertPos.left);
+    }
+    recordsInRoot.sort((a, b) -> ValueWrapper.compareArray(a.primaryKeyValues, b.primaryKeyValues));
+
+    rootPage.splitRoot(transactionId, false);
+
+    IndexPage testPage;
+    ArrayList<RecordLogical> recordsParseData = new ArrayList<>();
+
+    Pair<Integer, ArrayList<RecordLogical>> dataResult =
+        rootPage.getLeftmostDataPage(transactionId);
+    assertNotEquals(dataResult.left.intValue(), 0);
+    while (dataResult.left.intValue() != 0) {
+      testPage = (IndexPage) IO.read(tableMetadata.spaceId, dataResult.left);
+      dataResult = testPage.getAllRecordLogical(transactionId);
+      for (int i = 0; i < dataResult.right.size(); i++) {
+        recordsParseData.add(dataResult.right.get(i));
+      }
+    }
+
+    recordsInRoot.sort((a, b) -> ValueWrapper.compareArray(a.primaryKeyValues, b.primaryKeyValues));
+
+    assertEquals(recordsParseData.size(), recordsInRoot.size());
+    for (int i = 0; i < recordsParseData.size(); i++) {
+      assertEquals(
+          ValueWrapper.compareArray(
+              recordsParseData.get(i).primaryKeyValues, recordsInRoot.get(i).primaryKeyValues),
+          0);
+      assertEquals(
+          ValueWrapper.compareArray(
+              recordsParseData.get(i).nonPrimaryKeyValues,
+              recordsInRoot.get(i).nonPrimaryKeyValues),
+          0);
+      Pair<Boolean, IndexPage.RecordInPage> scanResult =
+          rootPage.scanTreeAndReturnRecord(transactionId, recordsParseData.get(i).primaryKeyValues);
+      assertTrue(scanResult.left);
+      assertEquals(
+          ValueWrapper.compareArray(
+              scanResult.right.primaryKeyValues, recordsInRoot.get(i).primaryKeyValues),
+          0);
+      assertEquals(
+          ValueWrapper.compareArray(
+              scanResult.right.nonPrimaryKeyValues, recordsInRoot.get(i).nonPrimaryKeyValues),
+          0);
+
+      Pair<Integer, ArrayList<RecordLogical>> scanPageResult =
+          rootPage.scanTreeAndReturnPage(transactionId, recordsParseData.get(i).primaryKeyValues);
+
+      boolean found = false;
+      for (int j = 0; j < scanPageResult.right.size(); j++) {
+        RecordLogical scanRecordInPage = scanPageResult.right.get(j);
+        if (ValueWrapper.compareArray(
+                    scanRecordInPage.primaryKeyValues, recordsParseData.get(i).primaryKeyValues)
+                == 0
+            && ValueWrapper.compareArray(
+                    scanRecordInPage.nonPrimaryKeyValues,
+                    recordsParseData.get(i).nonPrimaryKeyValues)
+                == 0) {
+          found = true;
+          break;
+        }
+      }
+
+      assertTrue(found);
+    }
+  }
+
+  @Test
+  public void testSplitRootWithoutLockSingleThread() throws Exception {
 
     DataType[] types = new DataType[5];
     types[0] = DataType.INT;
@@ -70,7 +222,224 @@ public class IndexPageTest {
     types[4] = DataType.DOUBLE;
 
     Table.TableMetadata tableMetadata = new Table.TableMetadata();
-    tableMetadata.prepare("testRecordInPageCopy", ServerRuntime.newTablespace());
+    tableMetadata.prepare("testSplitRootWithoutLock", ServerRuntime.newTablespace());
+    ArrayList<Column> columns = new ArrayList<>();
+    ArrayList<String> names = new ArrayList<>();
+    ArrayList<Integer> orders = new ArrayList<>();
+    int primaryKeyNumber = 10;
+    int nonPrimaryKeyNumber = 10;
+    for (int i = 0; i < primaryKeyNumber + nonPrimaryKeyNumber; i++) {
+      Column column = new Column();
+      String columnName = "column" + String.valueOf(i - nonPrimaryKeyNumber);
+      column.prepare(
+          columnName,
+          types[ThreadLocalRandom.current().nextInt(types.length)],
+          ThreadLocalRandom.current().nextInt(20));
+      column.setPrimaryKey(i - nonPrimaryKeyNumber);
+      names.add(columnName);
+      columns.add(column);
+      orders.add(i - nonPrimaryKeyNumber);
+    }
+    tableMetadata.setColumnsAndCompute(
+        names, columns, orders, primaryKeyNumber, nonPrimaryKeyNumber);
+
+    long transactionId = ServerRuntime.newTransaction();
+
+    System.out.println(
+        "max record size:"
+            + tableMetadata.getMaxRecordLength(IndexPage.RecordInPage.USER_DATA_RECORD));
+    assertTrue(
+        2 * tableMetadata.getMaxRecordLength(IndexPage.RecordInPage.USER_DATA_RECORD)
+            < ServerRuntime.config.pageSize - 64);
+
+    currentDatabase.createTable(transactionId, tableMetadata);
+
+    IndexPage rootPage =
+        (IndexPage) IO.read(tableMetadata.spaceId, ServerRuntime.config.indexRootPageIndex);
+
+    ArrayList<RecordLogical> recordsInRoot = new ArrayList<>();
+
+    for (int time = 0; time < 256; time++) {
+      RecordLogical record = new RecordLogical(tableMetadata);
+      for (int i = 0; i < record.primaryKeyValues.length; i++) {
+        Pair<String, ValueWrapper> r =
+            ValueWrapperTest.createSingleValueWrapperRandomly(
+                tableMetadata.getColumnDetailByOrderInType(i, true));
+        while (r.right.isNull)
+          r =
+              ValueWrapperTest.createSingleValueWrapperRandomly(
+                  tableMetadata.getColumnDetailByOrderInType(i, true));
+        record.primaryKeyValues[i] = r.right;
+      }
+      for (int i = 0; i < record.nonPrimaryKeyValues.length; i++) {
+        Pair<String, ValueWrapper> r =
+            ValueWrapperTest.createSingleValueWrapperRandomly(
+                tableMetadata.getColumnDetailByOrderInType(i, false));
+        record.nonPrimaryKeyValues[i] = r.right;
+      }
+
+      IndexPage.RecordInPage recordInPage =
+          IndexPage.makeRecordInPageFromLogical(record, tableMetadata);
+
+      Pair<Boolean, IndexPage.RecordInPage> insertPos =
+          rootPage.scanInternal(transactionId, recordInPage.primaryKeyValues);
+      if (insertPos.left) continue;
+
+      if (rootPage.freespaceStart
+              + tableMetadata.getMaxRecordLength(IndexPage.RecordInPage.USER_DATA_RECORD)
+          >= ServerRuntime.config.pageSize - 10) {
+        break;
+      }
+      rootPage.insertDataRecordIntoTree(transactionId, record);
+      recordsInRoot.add(record);
+
+      insertPos = rootPage.scanTreeAndReturnRecord(transactionId, record.primaryKeyValues);
+      assertTrue(insertPos.left);
+    }
+
+    recordsInRoot.sort((a, b) -> ValueWrapper.compareArray(a.primaryKeyValues, b.primaryKeyValues));
+
+    rootPage.splitRoot(transactionId, false);
+    Pair<Integer, ArrayList<RecordLogical>> splittingRootRecords =
+        rootPage.getAllRecordLogical(transactionId);
+    assertEquals(2, splittingRootRecords.right.size());
+    assertNotEquals(0, splittingRootRecords.left.intValue());
+    assertTrue(rootPage.isRightest());
+
+    Pair<Integer, ArrayList<RecordLogical>> leftmostRecords =
+        rootPage.getLeftmostDataPage(transactionId);
+
+    assertEquals(0, leftmostRecords.right.size());
+    int leftPageId = leftmostRecords.left;
+    assertEquals(leftPageId, ServerRuntime.config.indexLeftmostLeafIndex);
+
+    IndexPage leftPage = (IndexPage) IO.read(tableMetadata.spaceId, leftPageId);
+    assertFalse(leftPage.isRightest());
+    Pair<Integer, ArrayList<RecordLogical>> leftRecords =
+        leftPage.getAllRecordLogical(transactionId);
+
+    int rightPageId = leftRecords.left;
+    IndexPage rightPage = (IndexPage) IO.read(tableMetadata.spaceId, rightPageId);
+    Pair<Integer, ArrayList<RecordLogical>> rightRecords =
+        rightPage.getAllRecordLogical(transactionId);
+    assertTrue(rightPage.isRightest());
+
+    assertEquals(recordsInRoot.size(), leftRecords.right.size() + rightRecords.right.size());
+    assertEquals(
+        ValueWrapper.compareArray(
+            splittingRootRecords.right.get(0).primaryKeyValues,
+            recordsInRoot.get(leftRecords.right.size() - 1).primaryKeyValues),
+        0);
+    assertEquals(
+        ValueWrapper.compareArray(
+            splittingRootRecords.right.get(1).primaryKeyValues,
+            recordsInRoot.get(leftRecords.right.size() + rightRecords.right.size() - 1)
+                .primaryKeyValues),
+        0);
+
+    for (int cnt = 0; cnt < leftRecords.right.size(); cnt++) {
+      assertEquals(
+          0,
+          ValueWrapper.compareArray(
+              leftRecords.right.get(cnt).primaryKeyValues,
+              recordsInRoot.get(cnt).primaryKeyValues));
+      assertEquals(
+          0,
+          ValueWrapper.compareArray(
+              leftRecords.right.get(cnt).nonPrimaryKeyValues,
+              recordsInRoot.get(cnt).nonPrimaryKeyValues));
+    }
+
+    int base = leftRecords.right.size();
+    for (int cnt = 0; cnt < rightRecords.right.size(); cnt++) {
+      assertEquals(
+          0,
+          ValueWrapper.compareArray(
+              rightRecords.right.get(cnt).primaryKeyValues,
+              recordsInRoot.get(cnt + base).primaryKeyValues));
+      assertEquals(
+          0,
+          ValueWrapper.compareArray(
+              rightRecords.right.get(cnt).nonPrimaryKeyValues,
+              recordsInRoot.get(cnt + base).nonPrimaryKeyValues));
+    }
+
+    rootPage = new IndexPage(rootPage.bytes);
+    splittingRootRecords = rootPage.getAllRecordLogical(transactionId);
+    assertEquals(2, splittingRootRecords.right.size());
+    assertNotEquals(0, splittingRootRecords.left.intValue());
+    assertTrue(rootPage.isRightest());
+
+    leftmostRecords = rootPage.getLeftmostDataPage(transactionId);
+
+    assertEquals(0, leftmostRecords.right.size());
+    leftPageId = leftmostRecords.left;
+    assertEquals(leftPageId, ServerRuntime.config.indexLeftmostLeafIndex);
+
+    leftPage = (IndexPage) new IndexPage(leftPage.bytes);
+    assertEquals(leftPage.pageId, leftPageId);
+    assertFalse(leftPage.isRightest());
+    leftRecords = leftPage.getAllRecordLogical(transactionId);
+
+    rightPageId = leftRecords.left;
+    rightPage = (IndexPage) new IndexPage(rightPage.bytes);
+    assertEquals(rightPageId, rightPage.pageId);
+    rightRecords = rightPage.getAllRecordLogical(transactionId);
+    assertTrue(rightPage.isRightest());
+
+    assertEquals(recordsInRoot.size(), leftRecords.right.size() + rightRecords.right.size());
+    assertEquals(
+        ValueWrapper.compareArray(
+            splittingRootRecords.right.get(0).primaryKeyValues,
+            recordsInRoot.get(leftRecords.right.size() - 1).primaryKeyValues),
+        0);
+    assertEquals(
+        ValueWrapper.compareArray(
+            splittingRootRecords.right.get(1).primaryKeyValues,
+            recordsInRoot.get(leftRecords.right.size() + rightRecords.right.size() - 1)
+                .primaryKeyValues),
+        0);
+
+    for (int cnt = 0; cnt < leftRecords.right.size(); cnt++) {
+      assertEquals(
+          0,
+          ValueWrapper.compareArray(
+              leftRecords.right.get(cnt).primaryKeyValues,
+              recordsInRoot.get(cnt).primaryKeyValues));
+      assertEquals(
+          0,
+          ValueWrapper.compareArray(
+              leftRecords.right.get(cnt).nonPrimaryKeyValues,
+              recordsInRoot.get(cnt).nonPrimaryKeyValues));
+    }
+
+    base = leftRecords.right.size();
+    for (int cnt = 0; cnt < rightRecords.right.size(); cnt++) {
+      assertEquals(
+          0,
+          ValueWrapper.compareArray(
+              rightRecords.right.get(cnt).primaryKeyValues,
+              recordsInRoot.get(cnt + base).primaryKeyValues));
+      assertEquals(
+          0,
+          ValueWrapper.compareArray(
+              rightRecords.right.get(cnt).nonPrimaryKeyValues,
+              recordsInRoot.get(cnt + base).nonPrimaryKeyValues));
+    }
+  }
+
+  @Test
+  public void testRecordInPageNotSplitSingleThread() throws Exception {
+
+    DataType[] types = new DataType[5];
+    types[0] = DataType.INT;
+    types[1] = DataType.STRING;
+    types[2] = DataType.FLOAT;
+    types[3] = DataType.LONG;
+    types[4] = DataType.DOUBLE;
+
+    Table.TableMetadata tableMetadata = new Table.TableMetadata();
+    tableMetadata.prepare("testRecordInPageNotSplitSingleThread", ServerRuntime.newTablespace());
     ArrayList<Column> columns = new ArrayList<>();
     ArrayList<String> names = new ArrayList<>();
     ArrayList<Integer> orders = new ArrayList<>();

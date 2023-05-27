@@ -210,7 +210,7 @@ public class SelectPlan extends LogicalPlan {
   public void enumPages(
       ArrayList<Table.TableMetadata> tables,
       int iter,
-      ArrayList<Pair<Table.TableMetadata, IndexPage>> pages)
+      ArrayList<Pair<Table.TableMetadata, ArrayList<RecordLogical>>> pages)
       throws Exception {
     if (iter == tables.size()) {
       enumTuple(pages, 0, new ArrayList<>());
@@ -221,14 +221,14 @@ public class SelectPlan extends LogicalPlan {
         (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
     Pair<Integer, ArrayList<RecordLogical>> pageIter = rootPage.getLeftmostDataPage(transactionId);
     if (pageIter.left == 0) {
-      pages.add(new Pair<>(table, rootPage));
+      pages.add(new Pair<>(table, pageIter.right));
       enumPages(tables, iter + 1, pages);
       pages.remove(iter);
     } else {
       IndexPage page = (IndexPage) IO.read(table.spaceId, pageIter.left);
       do {
         pageIter = page.getAllRecordLogical(transactionId);
-        pages.add(new Pair<>(table, page));
+        pages.add(new Pair<>(table, pageIter.right));
         enumPages(tables, iter + 1, pages);
         pages.remove(iter);
         if (pageIter.left <= 0) break;
@@ -238,7 +238,7 @@ public class SelectPlan extends LogicalPlan {
   }
 
   private void enumTuple(
-      ArrayList<Pair<Table.TableMetadata, IndexPage>> pages,
+      ArrayList<Pair<Table.TableMetadata, ArrayList<RecordLogical>>> pages,
       int iter,
       ArrayList<Pair<Table.TableMetadata, RecordLogical>> records) {
     if (iter == pages.size()) {
@@ -255,8 +255,8 @@ public class SelectPlan extends LogicalPlan {
       res.rows.add(result);
       return;
     }
-    Pair<Table.TableMetadata, IndexPage> page = pages.get(iter);
-    ArrayList<RecordLogical> allRecordLogical = page.right.getAllRecordLogical(transactionId).right;
+    Pair<Table.TableMetadata, ArrayList<RecordLogical>> page = pages.get(iter);
+    ArrayList<RecordLogical> allRecordLogical = page.right;
     for (RecordLogical record : allRecordLogical) {
       if (useWhere)
         if (L_where.tableName().getText().equals(page.left.name)) {

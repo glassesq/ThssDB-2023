@@ -3,20 +3,14 @@ package cn.edu.thssdb.storage.page;
 import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.runtime.ServerRuntime;
 
-public class OverallPage extends ExtentManagePage {
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class OverallPage extends Page {
   /* Tablespace Header */
+  public AtomicInteger maxPageId = new AtomicInteger();
 
-  /** links all available extents as a list. Note: this is a one-way linked list. */
-  public ListBaseNode availableExtents = new ListBaseNode();
-
-  /** links all full extents as a list. Note: this is a one-way linked list. */
-  public ListBaseNode fullExtents = new ListBaseNode();
-
-  /** on which the first element of availableExtents. */
-  public ExtentManagePage currentAvailableExtentManager = this;
-
-  public int maxPageId;
   public int maxInitedPage;
+
   public int currentDataPage;
 
   public int flags;
@@ -41,22 +35,16 @@ public class OverallPage extends ExtentManagePage {
     overallPage.setup();
     overallPage.writeFILHeader(transactionId);
     overallPage.writeTablespace(transactionId);
-    overallPage.writeExtentManager(transactionId);
-    overallPage.usePage(transactionId, 0);
-    overallPage.usePage(transactionId, 1);
-    overallPage.usePage(transactionId, ServerRuntime.config.indexRootPageIndex);
-    overallPage.usePage(transactionId, ServerRuntime.config.indexLeftmostLeafIndex);
+    overallPage.maxPageId.set(ServerRuntime.config.indexLeftmostLeafIndex);
     return overallPage;
   }
 
   private void parseTablespace() {
-    maxPageId = parseIntegerBig(32 + 4);
+    maxPageId.set(parseIntegerBig(32 + 4));
     maxInitedPage = parseIntegerBig(32 + 8);
     currentDataPage = parseIntegerBig(32 + 12);
     flags = parseIntegerBig(32 + 16);
-    /* RESERVED FOR 20 bytes */
-    availableExtents.parse(32 + 36);
-    fullExtents.parse(32 + 52);
+    /* RESERVED FOR 52 bytes */
   }
 
   /**
@@ -67,10 +55,10 @@ public class OverallPage extends ExtentManagePage {
   public void writeTablespace(long transactionId) {
     /* First 16 valid bytes */
     byte[] newValue = new byte[16];
-    newValue[0] = (byte) (maxPageId >> 24);
-    newValue[1] = (byte) (maxPageId >> 16);
-    newValue[2] = (byte) (maxPageId >> 8);
-    newValue[3] = (byte) maxPageId;
+    newValue[0] = (byte) (maxPageId.get() >> 24);
+    newValue[1] = (byte) (maxPageId.get() >> 16);
+    newValue[2] = (byte) (maxPageId.get() >> 8);
+    newValue[3] = (byte) maxPageId.get();
     newValue[4] = (byte) (maxInitedPage >> 24);
     newValue[5] = (byte) (maxInitedPage >> 16);
     newValue[6] = (byte) (maxInitedPage >> 8);
@@ -84,70 +72,21 @@ public class OverallPage extends ExtentManagePage {
     newValue[14] = (byte) (flags >> 8);
     newValue[15] = (byte) flags;
     IO.write(transactionId, this, 32, 16, newValue, false);
-    /* RESERVED 20 bytes */
-    /* Two ListBaseNode */
-    availableExtents.write(transactionId, this, 32 + 36);
-    fullExtents.write(transactionId, this, 32 + 52);
   }
 
   /**
-   * Allocate one page if possible. And then set the corresponding bit to true. Update information
-   * in relevant ExtentManage Pages.
+   * Allocate one page if possible.
    *
    * @return allocated pageId.
    */
-  public int allocatePage(long transactionId) throws Exception {
-    // TODO: latch
-    if (availableExtents.length == 0) {
-      throw new Exception("No extent can be allocated now. Further Implementation Needed.");
-    }
-    ExtentEntry entry;
-    int allocatedPageId;
-    int extentIdWithinManager = (availableExtents.nextOffset - 100) / 20;
-
-    entry = currentAvailableExtentManager.extentEntries[extentIdWithinManager];
-    currentAvailableExtentManager.usePage(
-        transactionId, extentIdWithinManager * 64 + availableExtents.nextPageId);
-    allocatedPageId =
-        entry.allocatePage() + extentIdWithinManager * 64 + availableExtents.nextPageId;
-
-    if (entry.minAvailablePageId == 64) {
-      /* this entry's pages are exhausted. Therefore, we may choose the second node in availableExtents List. */
-      int nextEntryPageId = entry.listNode.nextPageId;
-      int nextEntryOffset = entry.listNode.nextOffset;
-
-      /* update fullExtents List */
-      entry.listNode.nextPageId = fullExtents.nextPageId;
-      entry.listNode.nextOffset = fullExtents.nextOffset;
-      entry.listNode.write(
-          transactionId, currentAvailableExtentManager, 100 + extentIdWithinManager * 20);
-
-      fullExtents.length += 1;
-      fullExtents.nextPageId = availableExtents.nextPageId;
-      fullExtents.nextOffset = availableExtents.nextOffset;
-      fullExtents.write(transactionId, this, 32 + 52);
-
-      /* update availableExtents List */
-      availableExtents.length -= 1;
-      availableExtents.nextPageId = nextEntryPageId;
-      availableExtents.nextOffset = nextEntryOffset;
-      availableExtents.write(
-          transactionId, this, 32 + 36); /* availableExtentListNode starts from position 36 + 32 */
-
-      /* update currentAvailableExtentManager, on which the first element of availableExtents. */
-      if (availableExtents.length > 0) {
-        currentAvailableExtentManager =
-            (ExtentManagePage) IO.read(this.spaceId, availableExtents.nextPageId);
-      } else {
-        // TODO: more extents shall be added.
-      }
-    }
+  public synchronized int allocatePage(long transactionId) throws Exception {
+    int allocatedPageId = maxPageId.incrementAndGet();
+    System.out.println("################################# allocate new page: " + allocatedPageId);
+    writeTablespace(transactionId);
     return allocatedPageId;
   }
 
   public void setup() {
-    // TODO: this is only for test. need to be revised.
-    parseExtentEntry();
     parseTablespace();
   }
 }

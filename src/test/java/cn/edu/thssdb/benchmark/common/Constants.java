@@ -8,12 +8,12 @@ public class Constants {
   // 表数
   public static final int tableCount = 10;
   // 字符串长度
-  public static final int stringLength = 5;
+  public static final int stringLength = 20;
   public static final int SUCCESS_STATUS_CODE = Config.SUCCESS_CODE;
   // 列类型
   public static final DataType[] columnTypes = {
     DataType.INT, DataType.LONG, DataType.FLOAT, DataType.DOUBLE, DataType.STRING
   };
   // 行数
-  public static final int rowCount = 10;
+  public static final int rowCount = 1000;
 }

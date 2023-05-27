@@ -70,8 +70,7 @@ public class ServerRuntime {
   public static void getReadLock(long transactionId, ReentrantReadWriteLock lock) {
     if (config.serializable) {
       getTwoPhaseLock(transactionId, lock.readLock());
-    }
-    else {
+    } else {
       lock.readLock().lock();
     }
   }
@@ -83,7 +82,7 @@ public class ServerRuntime {
    */
   public static void releaseReadLock(ReentrantReadWriteLock lock) {
     if (!config.serializable) {
-        lock.readLock().unlock();
+      lock.readLock().unlock();
     }
   }
 
