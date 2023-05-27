@@ -83,7 +83,7 @@ public class DeletePlan extends LogicalPlan {
     while (pageResult.left > 0) {
       if (deleteAll) {
         rightPage = (IndexPage) IO.read(table.spaceId, pageResult.left);
-        pageResult = rightPage.deleteAll(transactionId);
+        pageResult.left = rightPage.deleteAll(transactionId);
       } else {
         rightPage = (IndexPage) IO.read(table.spaceId, pageResult.left);
         pageResult = rightPage.deleteWithPrimaryCondition(transactionId, condition, query);
@@ -146,7 +146,6 @@ public class DeletePlan extends LogicalPlan {
     } else {
       if (table.getPrimaryKeyNumber() == 1
           && L_where.columnName().getText().equals(table.getPrimaryKeyList().get(0))) {
-        // 单列主键，且WHERE子句删除主键时
         if (cmp_where.EQ() != null) {
           deleteEqual(table);
         } else if (cmp_where.LE() != null || cmp_where.LT() != null) {

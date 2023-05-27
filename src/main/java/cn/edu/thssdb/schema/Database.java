@@ -51,13 +51,13 @@ public class Database {
      */
     public void createTable(long transactionId, Table.TableMetadata tableMetadata)
         throws Exception {
-      metaDataLatch.writeLock().lock();
+      //      metaDataLatch.writeLock().lock();
       tables.put(tableMetadata.spaceId, tableMetadata);
       object.getJSONArray("tables").put(tableMetadata.object);
       IO.writeCreateTable(transactionId, this.databaseId, tableMetadata);
       tableMetadata.initTablespaceFile(transactionId);
       ServerRuntime.tableMetadata.put(tableMetadata.spaceId, tableMetadata);
-      metaDataLatch.writeLock().unlock();
+      //      metaDataLatch.writeLock().unlock();
     }
 
     /**
@@ -71,7 +71,7 @@ public class Database {
      */
     public static DatabaseMetadata createDatabase(long transactionId, String name)
         throws Exception {
-      metaDataLatch.writeLock().lock();
+      //      metaDataLatch.writeLock().lock();
       if (ServerRuntime.databaseNameLookup.containsKey(name)) return null;
       DatabaseMetadata metadata = new DatabaseMetadata();
       metadata.name = name;
@@ -85,7 +85,7 @@ public class Database {
       ServerRuntime.metadataArray.put(metadata.object);
       ServerRuntime.databaseNameLookup.put(name, metadata.databaseId);
       IO.writeCreateDatabase(transactionId, name, metadata.databaseId);
-      metaDataLatch.writeLock().unlock();
+      //      metaDataLatch.writeLock().unlock();
       return metadata;
     }
 

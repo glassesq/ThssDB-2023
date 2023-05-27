@@ -64,6 +64,7 @@ public class Column {
 
   public static Column parse(JSONObject object) throws Exception {
     Column column = new Column();
+    column.name = object.getString("columnName");
     column.object = object;
     column.type = str2DataType(object.getString("type"));
     if (column.type == DataType.STRING) column.length = object.getInt("length");

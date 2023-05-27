@@ -552,7 +552,9 @@ public class IndexPage extends Page {
     RecordInPage record = infimumRecord;
     while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
       if (record.recordType != RecordInPage.SYSTEM_INFIMUM_RECORD) {
-        recordList.add(new RecordLogical(record, metadata));
+        if (!record.isDeleted()) {
+          recordList.add(new RecordLogical(record, metadata));
+        }
       }
       record = record.nextRecordInPage;
     }
@@ -583,11 +585,15 @@ public class IndexPage extends Page {
           || record.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
         ServerRuntime.getReadLock(transactionId, this.pageReadAndWriteLatch);
         this.pageReadAndWriteLatch.readLock().unlock();
+
         ArrayList<RecordLogical> recordList = new ArrayList<>();
         while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
-          recordList.add(new RecordLogical(record, metadata));
+          if (!record.isDeleted()) {
+            recordList.add(new RecordLogical(record, metadata));
+          }
           record = record.nextRecordInPage;
         }
+
         ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
         return new Pair<>(0, recordList);
       } else if (record.recordType == RecordInPage.USER_POINTER_RECORD) {
@@ -648,25 +654,44 @@ public class IndexPage extends Page {
       long transactionId, RecordLogical recordToBeInserted, RecordInPage previousRecord) {
 
     ServerRuntime.getWriteLock(transactionId, this.pageReadAndWriteLatch);
-    // TODO: deleted scenarios
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
 
     RecordInPage record = makeRecordInPageFromLogical(recordToBeInserted, metadata);
-    record.setNextRecordInPage(previousRecord.nextRecordInPage);
     record.updateTransactionId = transactionId;
-    record.myOffset = this.freespaceStart + 4 + metadata.getNullBitmapLengthInByte();
 
-    previousRecord.nextAbsoluteOffset = record.myOffset;
-    /* reference assignment is atomic.*/
-    /* ********************** BEGIN ATOMIC ********************** */
-    previousRecord.nextRecordInPage = record;
-    /* ********************** END ATOMIC ********************** */
+    if (previousRecord.nextRecordInPage.recordType == RecordInPage.SYSTEM_SUPREME_RECORD
+        || ValueWrapper.compareArray(
+                recordToBeInserted.primaryKeyValues,
+                previousRecord.nextRecordInPage.primaryKeyValues)
+            != 0) {
+      System.out.println(" new record.");
+      record.setNextRecordInPage(previousRecord.nextRecordInPage);
+      record.myOffset = this.freespaceStart + 4 + metadata.getNullBitmapLengthInByte();
 
-    this.freespaceStart =
-        record.myOffset + metadata.getPrimaryKeyLength() + metadata.getNonPrimaryKeyLength() + 15;
-    writeIndexHeader(transactionId);
-    record.write(transactionId, this, record.myOffset);
-    previousRecord.write(transactionId, this, previousRecord.myOffset);
+      previousRecord.nextAbsoluteOffset = record.myOffset;
+      /* reference assignment is atomic.*/
+      /* ********************** BEGIN ATOMIC ********************** */
+      previousRecord.nextRecordInPage = record;
+      /* ********************** END ATOMIC ********************** */
+
+      this.freespaceStart =
+          record.myOffset + metadata.getPrimaryKeyLength() + metadata.getNonPrimaryKeyLength() + 15;
+      writeIndexHeader(transactionId);
+      record.write(transactionId, this, record.myOffset);
+      previousRecord.write(transactionId, this, previousRecord.myOffset);
+    } else {
+      System.out.println(" old record but deleted.");
+      record.setNextRecordInPage(previousRecord.nextRecordInPage.nextRecordInPage);
+      record.myOffset = previousRecord.nextRecordInPage.myOffset;
+
+      /* reference assignment is atomic.*/
+      /* ********************** BEGIN ATOMIC ********************** */
+      previousRecord.nextRecordInPage = record;
+      /* ********************** END ATOMIC ********************** */
+
+      writeIndexHeader(transactionId);
+      record.write(transactionId, this, record.myOffset);
+    }
 
     // TODO: delete for test
     //    System.out.println(
@@ -762,10 +787,7 @@ public class IndexPage extends Page {
 
     //    System.out.println("insert here ********************************" + result.right);
 
-    if (result.left && !result.right.isDeleted()) {
-      /* The record already exists. */
-      return false;
-    }
+    if (result.left) return false;
 
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
     int maxLength = metadata.getMaxRecordLength(RecordInPage.USER_DATA_RECORD);
@@ -809,8 +831,9 @@ public class IndexPage extends Page {
       insertResult =
           currentPage.scanInternal(transactionId, dataRecordToBeInserted.primaryKeyValues);
       if (insertResult.right.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+        /* The record already exists. */
+        if (insertResult.left) return false;
         if (currentPage.notSafeToInsert(maxLength)) {
-          // currentPage.pageReadAndWriteLatch.writeLock());
           if (!currentPage.splitMyself(transactionId, ancestors, true)) return false;
           currentPage.bLinkTreeLatch.unlock();
           if (currentPage.isRoot()) {
@@ -825,14 +848,12 @@ public class IndexPage extends Page {
                 transactionId, dataRecordToBeInserted, ancestors, maxLength);
           }
         }
-        // TODO:        ServerRuntime.getLock(transactionId,
-        // currentPage.pageReadAndWriteLatch.writeLock());
-
         currentPage.insertDataRecordInternal(
             transactionId, dataRecordToBeInserted, insertResult.right);
         currentPage.bLinkTreeLatch.unlock();
         break;
       } else {
+        /* move right */
         IndexPage previousPage = currentPage;
         // TODO: test for concurrency
         try {
@@ -986,7 +1007,7 @@ public class IndexPage extends Page {
    * @param ancestors a stack containing the rightmost page of each layer above
    * @return true if succeed
    */
-  public boolean splitMyself(long transactionId, Stack<IndexPage> ancestors, boolean requireLock) {
+  private boolean splitMyself(long transactionId, Stack<IndexPage> ancestors, boolean requireLock) {
     if (requireLock) {
       ServerRuntime.getWriteLock(transactionId, this.pageReadAndWriteLatch);
     }
@@ -1040,7 +1061,6 @@ public class IndexPage extends Page {
             - maxRecordInRight.nullBitmap.length;
 
     /* replace records' position in left */
-    // TODO
     RecordInPage previousRecord = infimumRecord;
     RecordInPage reposRecord = infimumRecord.nextRecordInPage;
     int currentPos = 64 + metadata.getNullBitmapLengthInByte() + 4;
@@ -1061,6 +1081,7 @@ public class IndexPage extends Page {
         transactionId, ancestors, maxLength, this.pageId, rightPageId, maxRecordInRight)) {
       System.out.println("The pointer record is missing for splitting process.");
     }
+    // TODO: modify value in left pointer
 
     this.writeAll(transactionId);
     rightPage.writeAll(transactionId);
@@ -1220,7 +1241,7 @@ public class IndexPage extends Page {
                 childPageToPoint,
                 maxRecordInRight);
           } else {
-            // TODO
+            // TODO: ?????
             int leftPageId = maybeParent.infimumRecord.nextRecordInPage.childPageId;
             IndexPage rootPage = maybeParent;
             try {
@@ -1297,7 +1318,6 @@ public class IndexPage extends Page {
     ServerRuntime.getReadLock(transactionId, this.pageReadAndWriteLatch);
     result = currentPage.scanInternal(transactionId, searchKey);
     ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
-    //     TODO: check if deleted
     currentPage.bLinkTreeLatch.unlock();
 
     return result;
@@ -1322,7 +1342,6 @@ public class IndexPage extends Page {
         currentPage = (IndexPage) IO.read(this.spaceId, result.right.nextAbsoluteOffset);
       } else break;
     } while (true);
-    // TODO: check if deleted
     return currentPage.getAllRecordLogical(transactionId);
   }
 
@@ -1355,7 +1374,11 @@ public class IndexPage extends Page {
     while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
       int compareResult = ValueWrapper.compareArray(searchKey, record.primaryKeyValues);
       if (compareResult == 0) {
-        return new Pair<>(true, record);
+        if (!record.isDeleted()) {
+          return new Pair<>(true, record);
+        } else {
+          return new Pair<>(false, previousRecord);
+        }
       } else if (compareResult < 0) {
         if (record.recordType == RecordInPage.USER_POINTER_RECORD) return new Pair<>(false, record);
         else return new Pair<>(false, previousRecord);
@@ -1403,8 +1426,47 @@ public class IndexPage extends Page {
   }
 
   public int deleteFromLeftmostDataPage(long transactionId, recordCondition condition) {
-    System.out.println("enter delete from leftmost data page.");
-    return 0;
+    if (this.pageId != ServerRuntime.config.indexRootPageIndex) {
+      /* only root page can have access to this method. */
+      return -1;
+    }
+    RecordInPage record = infimumRecord.nextRecordInPage;
+    if (record.recordType == RecordInPage.USER_DATA_RECORD
+        || record.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+
+      System.out.println("try b link.");
+      bLinkTreeLatch.lock();
+      // TODO: 2PL write lock
+      System.out.println("b link get.");
+
+      record = infimumRecord.nextRecordInPage;
+
+      if (record.recordType == RecordInPage.USER_DATA_RECORD
+          || record.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+
+        boolean isChanged = false;
+        while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+          if (condition.isSatisfied(record)) {
+            if (record.setDeleted()) {
+              isChanged = true;
+              record.write(transactionId, this, record.myOffset);
+            }
+          }
+          record = record.nextRecordInPage;
+        }
+        bLinkTreeLatch.unlock();
+        if (isChanged) {
+          // TODO: 2PL lock release ???
+        }
+        return 0;
+      } else if (record.recordType == RecordInPage.USER_POINTER_RECORD) {
+        bLinkTreeLatch.unlock();
+        return ServerRuntime.config.indexLeftmostLeafIndex;
+      }
+    } else if (record.recordType == RecordInPage.USER_POINTER_RECORD) {
+      return ServerRuntime.config.indexLeftmostLeafIndex;
+    }
+    return -1;
   }
 
   /**
@@ -1414,8 +1476,32 @@ public class IndexPage extends Page {
    * @param condition condition
    */
   public int deleteWithCondition(long transactionId, recordCondition condition) {
-    System.out.println("enter delete with condition");
-    return 0;
+
+    System.out.println("delete with condition start");
+
+    bLinkTreeLatch.lock();
+    // TODO: 2PL write lock
+    boolean isChanged = false;
+    RecordInPage record = infimumRecord;
+    while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+      if (record.recordType != RecordInPage.SYSTEM_INFIMUM_RECORD) {
+        if (condition.isSatisfied(record)) {
+          if (record.setDeleted()) {
+            isChanged = true;
+            record.write(transactionId, this, record.myOffset);
+            System.out.println("record delete" + record);
+          } else {
+            System.out.println("record is already deleted: " + record);
+          }
+        }
+      }
+      record = record.nextRecordInPage;
+    }
+    bLinkTreeLatch.unlock();
+    if (!isChanged) {
+      // TODO: release write lock ???????
+    }
+    return record.nextAbsoluteOffset;
   }
 
   /**
@@ -1427,7 +1513,31 @@ public class IndexPage extends Page {
   public Pair<Integer, Integer> deleteWithPrimaryCondition(
       long transactionId, recordCondition condition, ValueWrapper[] searchKey) {
     System.out.println("enter delete with primary condition");
-    return new Pair<>(0, 0);
+    /* This must be a data page. */
+    this.bLinkTreeLatch.lock();
+
+    // TODO: 2PL write lock
+
+    RecordInPage record = this.infimumRecord.nextRecordInPage;
+    RecordInPage previousRecord = this.infimumRecord;
+    boolean isChanged = false;
+    while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+      if (record.recordType != RecordInPage.SYSTEM_INFIMUM_RECORD) {
+        if (condition.isSatisfied(record)) {
+          if (record.setDeleted()) {
+            isChanged = true;
+            record.write(transactionId, this, record.myOffset);
+          }
+        }
+      }
+      record = record.nextRecordInPage;
+    }
+
+    int compareResult = ValueWrapper.compareArray(previousRecord.primaryKeyValues, searchKey);
+    // TODO: 2PL write lock
+    this.bLinkTreeLatch.unlock();
+
+    return new Pair<>(record.nextAbsoluteOffset, compareResult);
   }
 
   /**
@@ -1437,8 +1547,65 @@ public class IndexPage extends Page {
    * @param transactionId transaction Id
    * @param searchKey search key
    */
-  public void scanTreeAndDeleteRecordWithKey(long transactionId, ValueWrapper[] searchKey) {
-    System.out.println("enter scan tree and delete record with key");
+  public void scanTreeAndDeleteRecordWithKey(long transactionId, ValueWrapper[] searchKey)
+      throws Exception {
+
+    Pair<Boolean, RecordInPage> result;
+    IndexPage currentPage = this;
+    do {
+      result = currentPage.scanInternal(transactionId, searchKey);
+      if (result.right.recordType == RecordInPage.USER_POINTER_RECORD) {
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.childPageId);
+      } else if (result.right.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.nextAbsoluteOffset);
+      } else break;
+    } while (true);
+
+    do {
+      currentPage.bLinkTreeLatch.lock();
+
+      RecordInPage record = currentPage.infimumRecord;
+      boolean isChanged = false;
+      boolean notExistOrFound = false;
+      while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+        if (record.recordType != RecordInPage.SYSTEM_INFIMUM_RECORD) {
+          int compareResult = ValueWrapper.compareArray(record.primaryKeyValues, searchKey);
+          if (compareResult >= 0) {
+            if (compareResult > 0) {
+              if (record.recordType == RecordInPage.USER_DATA_RECORD) {
+                // TODO: 2PL write lock
+                notExistOrFound = true;
+              }
+            } else {
+              if (record.recordType == RecordInPage.USER_DATA_RECORD) {
+                // TODO: 2PL write lock
+                if (record.setDeleted()) {
+                  isChanged = true;
+                  notExistOrFound = true;
+                  record.write(transactionId, currentPage, record.myOffset);
+                  System.out.println("record delete" + record);
+                }
+              }
+            }
+            break;
+          }
+        }
+        record = record.nextRecordInPage;
+      }
+
+      if (notExistOrFound) break;
+
+      if (record.recordType == RecordInPage.USER_POINTER_RECORD) {
+        currentPage.bLinkTreeLatch.unlock();
+        currentPage = (IndexPage) IO.read(this.spaceId, record.childPageId);
+      } else if (record.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+        currentPage.bLinkTreeLatch.unlock();
+        currentPage = (IndexPage) IO.read(this.spaceId, record.nextAbsoluteOffset);
+      } else break;
+    } while (true);
+
+    // TODO: 2PL write lock
+    currentPage.bLinkTreeLatch.unlock();
   }
 
   /**
@@ -1452,9 +1619,64 @@ public class IndexPage extends Page {
    *     maxRecordInPage.compareTo(searchKey)};
    */
   public Pair<Integer, Integer> scanTreeAndDeleteFromPage(
-      long transactionId, ValueWrapper[] searchKey, recordCondition condition) {
-    System.out.println("enter scan tree and delete from page");
-    return new Pair<>(0, 0);
+      long transactionId, ValueWrapper[] searchKey, recordCondition condition) throws Exception {
+
+    Pair<Boolean, RecordInPage> result;
+    IndexPage currentPage = this;
+    do {
+      result = currentPage.scanInternal(transactionId, searchKey);
+      if (result.right.recordType == RecordInPage.USER_POINTER_RECORD) {
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.childPageId);
+      } else if (result.right.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.nextAbsoluteOffset);
+      } else break;
+    } while (true);
+
+    do {
+      currentPage.bLinkTreeLatch.lock();
+      result = currentPage.scanInternal(transactionId, searchKey);
+      if (result.right.recordType == RecordInPage.USER_POINTER_RECORD) {
+        currentPage.bLinkTreeLatch.unlock();
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.childPageId);
+      } else if (result.right.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+        currentPage.bLinkTreeLatch.unlock();
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.nextAbsoluteOffset);
+      } else break;
+    } while (true);
+
+    // TODO: 2PL write lock
+    boolean isChanged = false;
+    int compareResult = 0;
+
+    RecordInPage record = currentPage.infimumRecord;
+    RecordInPage previousRecord = null;
+    while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+      if (record.recordType != RecordInPage.SYSTEM_INFIMUM_RECORD) {
+
+        if (condition.isSatisfied(record)) {
+          if (record.setDeleted()) {
+            isChanged = true;
+            record.write(transactionId, this, record.myOffset);
+            System.out.println("record delete" + record);
+          } else {
+            System.out.println("record is already deleted: " + record);
+          }
+        }
+      }
+      previousRecord = record;
+      record = record.nextRecordInPage;
+    }
+
+    if (previousRecord != null)
+      compareResult = ValueWrapper.compareArray(previousRecord.primaryKeyValues, searchKey);
+
+    if (!isChanged) {
+      // TODO: release write lock ???????
+    }
+
+    currentPage.bLinkTreeLatch.unlock();
+
+    return new Pair<>(record.nextAbsoluteOffset, compareResult);
   }
 
   /**
@@ -1464,8 +1686,25 @@ public class IndexPage extends Page {
    * @return pair left is the next page id, pair right is the result of {@code
    *     maxRecordInPage.compareTo(searchKey)}
    */
-  public Pair<Integer, Integer> deleteAll(long transactionId) {
-    System.out.println("enter delete all");
-    return new Pair<>(0, 0);
+  public int deleteAll(long transactionId) {
+    bLinkTreeLatch.lock();
+
+    // TODO: write lock
+    boolean isChanged = false;
+    RecordInPage record = infimumRecord;
+    while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+      if (record.recordType != RecordInPage.SYSTEM_INFIMUM_RECORD) {
+        if (record.setDeleted()) {
+          isChanged = true;
+          record.write(transactionId, this, record.myOffset);
+        }
+      }
+      record = record.nextRecordInPage;
+    }
+    bLinkTreeLatch.unlock();
+    if (!isChanged) {
+      // TODO: release write lock ???????
+    }
+    return record.nextAbsoluteOffset;
   }
 }
