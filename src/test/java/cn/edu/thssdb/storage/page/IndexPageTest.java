@@ -98,7 +98,6 @@ public class IndexPageTest {
             < ServerRuntime.config.pageSize - 64);
 
     long transactionId = ServerRuntime.newTransaction();
-
     currentDatabase.createTable(transactionId, tableMetadata);
 
     IndexPage rootPage =
@@ -106,7 +105,7 @@ public class IndexPageTest {
 
     ArrayList<RecordLogical> recordsInRoot = new ArrayList<>();
 
-    for (int time = 0; time < 1024; time++) {
+    for (int time = 0; time < 2048; time++) {
       RecordLogical record = new RecordLogical(tableMetadata);
       for (int i = 0; i < record.primaryKeyValues.length; i++) {
         Pair<String, ValueWrapper> r =
@@ -128,34 +127,47 @@ public class IndexPageTest {
       IndexPage.RecordInPage recordInPage =
           IndexPage.makeRecordInPageFromLogical(record, tableMetadata);
 
+      transactionId = ServerRuntime.newTransaction();
       Pair<Boolean, IndexPage.RecordInPage> insertPos =
           rootPage.scanTreeAndReturnRecord(transactionId, recordInPage.primaryKeyValues);
+      ServerRuntime.releaseAllLocks(transactionId);
       if (insertPos.left) continue;
 
+      transactionId = ServerRuntime.newTransaction();
       rootPage.insertDataRecordIntoTree(transactionId, record);
-      recordsInRoot.add(record);
+      ServerRuntime.releaseAllLocks(transactionId);
 
+      recordsInRoot.add(record);
+      transactionId = ServerRuntime.newTransaction();
       Pair<Integer, ArrayList<RecordLogical>> dataResult =
           rootPage.getLeftmostDataPage(transactionId);
       if (dataResult.left.intValue() == 0) {
         continue;
       }
+      ServerRuntime.releaseAllLocks(transactionId);
       assertNotEquals(dataResult.left.intValue(), 0);
 
+      transactionId = ServerRuntime.newTransaction();
       insertPos = rootPage.scanTreeAndReturnRecord(transactionId, record.primaryKeyValues);
+      ServerRuntime.releaseAllLocks(transactionId);
 
       assertTrue(insertPos.left);
     }
     recordsInRoot.sort((a, b) -> ValueWrapper.compareArray(a.primaryKeyValues, b.primaryKeyValues));
 
+    transactionId = ServerRuntime.newTransaction();
     rootPage.splitRoot(transactionId, false);
+    ServerRuntime.releaseAllLocks(transactionId);
 
     IndexPage testPage;
     ArrayList<RecordLogical> recordsParseData = new ArrayList<>();
 
+    transactionId = ServerRuntime.newTransaction();
     Pair<Integer, ArrayList<RecordLogical>> dataResult =
         rootPage.getLeftmostDataPage(transactionId);
+
     assertNotEquals(dataResult.left.intValue(), 0);
+
     while (dataResult.left.intValue() != 0) {
       testPage = (IndexPage) IO.read(tableMetadata.spaceId, dataResult.left);
       dataResult = testPage.getAllRecordLogical(transactionId);
@@ -163,6 +175,8 @@ public class IndexPageTest {
         recordsParseData.add(dataResult.right.get(i));
       }
     }
+
+    ServerRuntime.releaseAllLocks(transactionId);
 
     recordsInRoot.sort((a, b) -> ValueWrapper.compareArray(a.primaryKeyValues, b.primaryKeyValues));
 
@@ -177,8 +191,10 @@ public class IndexPageTest {
               recordsParseData.get(i).nonPrimaryKeyValues,
               recordsInRoot.get(i).nonPrimaryKeyValues),
           0);
+      transactionId = ServerRuntime.newTransaction();
       Pair<Boolean, IndexPage.RecordInPage> scanResult =
           rootPage.scanTreeAndReturnRecord(transactionId, recordsParseData.get(i).primaryKeyValues);
+      ServerRuntime.releaseAllLocks(transactionId);
       assertTrue(scanResult.left);
       assertEquals(
           ValueWrapper.compareArray(
@@ -189,8 +205,10 @@ public class IndexPageTest {
               scanResult.right.nonPrimaryKeyValues, recordsInRoot.get(i).nonPrimaryKeyValues),
           0);
 
+      transactionId = ServerRuntime.newTransaction();
       Pair<Integer, ArrayList<RecordLogical>> scanPageResult =
           rootPage.scanTreeAndReturnPage(transactionId, recordsParseData.get(i).primaryKeyValues);
+      ServerRuntime.releaseAllLocks(transactionId);
 
       boolean found = false;
       for (int j = 0; j < scanPageResult.right.size(); j++) {
@@ -206,7 +224,6 @@ public class IndexPageTest {
           break;
         }
       }
-
       assertTrue(found);
     }
   }

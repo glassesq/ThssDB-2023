@@ -42,11 +42,10 @@ public class Page {
    */
   protected int nextPageId;
 
-  /** the type of current page. OVERALL(0), EXTENT_MANAGE(1), INDEX_ROOT(2), DATA(3), */
+  /** the type of current page. OVERALL(0), INDEX_ROOT(2), DATA(3), */
   public int pageType;
 
   public static final int OVERALL_PAGE = 0;
-  public static final int EXTENT_MANAGE_PAGE = 1;
   public static final int INDEX_PAGE = 2;
   public static final int DATA_PAGE = 3;
 

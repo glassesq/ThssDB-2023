@@ -641,8 +641,8 @@ public class IndexPage extends Page {
    */
   private void insertDataRecordInternal(
       long transactionId, RecordLogical recordToBeInserted, RecordInPage previousRecord) {
-    ServerRuntime.getTwoPhaseLock(transactionId, this.pageReadAndWriteLatch.writeLock());
 
+    ServerRuntime.getTwoPhaseLock(transactionId, this.pageReadAndWriteLatch.writeLock());
     // TODO: deleted scenarios
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
 
@@ -664,11 +664,11 @@ public class IndexPage extends Page {
     previousRecord.write(transactionId, this, previousRecord.myOffset);
 
     // TODO: delete for test
-    System.out.println(
-        "############################## The data record below is inserted in current page :"
-            + this.pageId);
-    System.out.println(record);
-    System.out.println("##############################");
+    //    System.out.println(
+    //        "############################## The data record below is inserted in current page :"
+    //            + this.pageId);
+    //    System.out.println(record);
+    //    System.out.println("##############################");
   }
 
   /**
@@ -740,11 +740,12 @@ public class IndexPage extends Page {
     Stack<IndexPage> ancestors = new Stack<>();
     IndexPage currentPage = this;
 
-    System.out.println("\n\n try to add: " + dataRecordToBeInserted.primaryKeyValues[0]);
+    //    System.out.println("\n\n try to add: " + dataRecordToBeInserted.primaryKeyValues[0]);
 
     do {
       result = currentPage.scanInternal(transactionId, dataRecordToBeInserted.primaryKeyValues);
-      System.out.println(" page Id " + currentPage.pageId + " result found: " + result.right);
+      //      System.out.println(" page Id " + currentPage.pageId + " result found: " +
+      // result.right);
       if (result.right.recordType == RecordInPage.USER_POINTER_RECORD) {
         if (result.right.isPointToNextLevel()) ancestors.add(currentPage);
         currentPage = (IndexPage) IO.read(this.spaceId, result.right.childPageId);
@@ -754,7 +755,7 @@ public class IndexPage extends Page {
       } else break;
     } while (true);
 
-    System.out.println("insert here ********************************" + result.right);
+    //    System.out.println("insert here ********************************" + result.right);
 
     if (result.left && !result.right.isDeleted()) {
       /* The record already exists. */
@@ -764,10 +765,10 @@ public class IndexPage extends Page {
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
     int maxLength = metadata.getMaxRecordLength(RecordInPage.USER_DATA_RECORD);
 
-    System.out.println("the init ancestors size is: " + ancestors.size());
+    //    System.out.println("the init ancestors size is: " + ancestors.size());
     if (!currentPage.moveRightAndInsertData(
         transactionId, dataRecordToBeInserted, ancestors, maxLength)) {
-      System.out.println("The pointer record is missing for splitting process.");
+      //      System.out.println("The pointer record is missing for splitting process.");
       return false;
     }
 
@@ -794,7 +795,7 @@ public class IndexPage extends Page {
       int maxLength) {
     IndexPage currentPage = this;
     if (currentPage.infimumRecord.nextRecordInPage.recordType == RecordInPage.USER_POINTER_RECORD) {
-      System.out.println("why insert data into pointer page?");
+      //      System.out.println("why insert data into pointer page?");
       /* TODO: shall never happen */
     }
     Pair<Boolean, RecordInPage> insertResult;
@@ -873,10 +874,10 @@ public class IndexPage extends Page {
     pointerRecordToBeInserted.write(transactionId, this, pointerRecordToBeInserted.myOffset);
     previousRecord.write(transactionId, this, previousRecord.myOffset);
 
-    System.out.println(
-        "[POINTER]############################## The pointer record below is inserted:");
-    System.out.println(pointerRecordToBeInserted);
-    System.out.println("[POINTER]##############################");
+    //    System.out.println(
+    //        "[POINTER]############################## The pointer record below is inserted:");
+    //    System.out.println(pointerRecordToBeInserted);
+    //    System.out.println("[POINTER]##############################");
   }
 
   /**
@@ -1275,7 +1276,25 @@ public class IndexPage extends Page {
         currentPage = (IndexPage) IO.read(this.spaceId, result.right.nextAbsoluteOffset);
       } else break;
     } while (true);
-    // TODO: check if deleted
+
+    do {
+      currentPage.bLinkTreeLatch.lock();
+      result = currentPage.scanInternal(transactionId, searchKey);
+      if (result.right.recordType == RecordInPage.USER_POINTER_RECORD) {
+        currentPage.bLinkTreeLatch.unlock();
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.childPageId);
+      } else if (result.right.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
+        currentPage.bLinkTreeLatch.unlock();
+        currentPage = (IndexPage) IO.read(this.spaceId, result.right.nextAbsoluteOffset);
+      } else break;
+    } while (true);
+
+    // TODO: ServerRuntime.getTwoPhaseLock(transactionId,
+    // currentPage.pageReadAndWriteLatch.readLock());
+    result = currentPage.scanInternal(transactionId, searchKey);
+    //     TODO: check if deleted
+    currentPage.bLinkTreeLatch.unlock();
+
     return result;
   }
   /**
@@ -1325,7 +1344,6 @@ public class IndexPage extends Page {
    *     explained above.
    */
   public Pair<Boolean, RecordInPage> scanInternal(long transactionId, ValueWrapper[] searchKey) {
-    ServerRuntime.getReadLock(transactionId, this.pageReadAndWriteLatch);
     RecordInPage record = infimumRecord.nextRecordInPage;
     RecordInPage previousRecord = infimumRecord;
     while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
@@ -1340,10 +1358,8 @@ public class IndexPage extends Page {
       record = record.nextRecordInPage;
     }
     if (record.nextAbsoluteOffset == 0) {
-      ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
       return new Pair<>(false, previousRecord);
     } else {
-      ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
       return new Pair<>(false, record);
     }
   }

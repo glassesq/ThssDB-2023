@@ -91,11 +91,9 @@ public class DiskBuffer {
       case INDEX_PAGE:
         page = new IndexPage(pageBytes);
         break;
-      case EXTENT_MANAGE_PAGE:
-        page = new ExtentManagePage(pageBytes);
-        break;
       case DATA_PAGE:
         page = new DataPage(pageBytes);
+        break;
       default:
         page = new Page(pageBytes);
     }
