@@ -37,7 +37,7 @@ public class Configuration {
   public Configuration() {
     allow_implicit_transaction = true;
     auto_commit = true;
-    serializable = false;
+    serializable = true;
 
     /* conflict test */
     // TODO: assert (!(allow_implicit_transaction && auto_commit));

@@ -62,6 +62,20 @@ public class ServerRuntime {
   }
 
   /**
+   * transaction get a write lock
+   *
+   * @param transactionId transaction id
+   * @param lock lock
+   */
+  public static void getWriteLock(long transactionId, ReentrantReadWriteLock lock) {
+    while (lock.getReadLockCount() > 0) {
+      lock.readLock().unlock();
+      locks.get(transactionId).remove(lock.readLock());
+    }
+    getTwoPhaseLock(transactionId, lock.writeLock());
+  }
+
+  /**
    * transaction get a read lock
    *
    * @param transactionId transaction id
