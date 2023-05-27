@@ -20,6 +20,7 @@ public abstract class LogicalPlan {
     CREATE_TABLE,
     SHOW_TABLE,
     INSERT,
-    SELECT
+    SELECT,
+    DELETE
   }
 }

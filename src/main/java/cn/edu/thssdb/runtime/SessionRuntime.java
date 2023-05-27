@@ -173,6 +173,22 @@ public class SessionRuntime {
               ++i;
             }
           }
+          break;
+        case DELETE:
+          DeletePlan deletePlan = (DeletePlan) plan;
+          if (deletePlan.broken)
+            return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+          Table.TableMetadata metadata =
+              currentDatabaseMetadata.getTableByName(deletePlan.tableName);
+          if (metadata == null)
+            return new ExecuteStatementResp(
+                StatusUtil.fail("Table " + deletePlan.tableName + " not found."), false);
+          System.out.println("DELETE starting");
+          deletePlan.doDelete(transactionId, metadata);
+          System.out.println("DELETE finished");
+          response =
+              new ExecuteStatementResp(StatusUtil.success("delete operation completed"), false);
+          break;
         default:
       }
 

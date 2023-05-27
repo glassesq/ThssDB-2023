@@ -50,7 +50,12 @@ public class IndexPage extends Page {
       return (flags & RIGHTEST_FLAG) != 0;
     }
 
-    // TODO: deleted flag
+    public boolean setDeleted() {
+      if (isDeleted()) return false;
+      flags |= DELETE_FLAG;
+      return true;
+    }
+
     public boolean isDeleted() {
       return (flags & DELETE_FLAG) != 0;
     }
@@ -1388,5 +1393,76 @@ public class IndexPage extends Page {
       record = record.nextRecordInPage;
     }
     return record.isRightest();
+  }
+
+  public interface recordCondition {
+    Boolean isSatisfied(RecordInPage record);
+  }
+
+  public int deleteFromLeftmostDataPage(long transactionId, recordCondition condition) {
+    System.out.println("enter delete from leftmost data page.");
+    return 0;
+  }
+
+  /**
+   * delete all records that satisfies the condition in this page.
+   *
+   * @param transactionId transaction Id
+   * @param condition condition
+   */
+  public int deleteWithCondition(long transactionId, recordCondition condition) {
+    System.out.println("enter delete with condition");
+    return 0;
+  }
+
+  /**
+   * delete all records that satisfies the condition in this page.
+   *
+   * @param transactionId transaction Id
+   * @param condition condition
+   */
+  public Pair<Integer, Integer> deleteWithPrimaryCondition(
+      long transactionId, recordCondition condition, ValueWrapper[] searchKey) {
+    System.out.println("enter delete with primary condition");
+    return new Pair<>(0, 0);
+  }
+
+  /**
+   * scan the whole tree and find the page where the record with search key resides. Delete that
+   * record.
+   *
+   * @param transactionId transaction Id
+   * @param searchKey search key
+   */
+  public void scanTreeAndDeleteRecordWithKey(long transactionId, ValueWrapper[] searchKey) {
+    System.out.println("enter scan tree and delete record with key");
+  }
+
+  /**
+   * scan the whole tree and find the page where the record with search key resides. Delete all
+   * records that satisfies the condition.
+   *
+   * @param transactionId transaction Id
+   * @param searchKey search key
+   * @param condition condition
+   * @return left is the next page id, right is the result of {@code
+   *     maxRecordInPage.compareTo(searchKey)};
+   */
+  public Pair<Integer, Integer> scanTreeAndDeleteFromPage(
+      long transactionId, ValueWrapper[] searchKey, recordCondition condition) {
+    System.out.println("enter scan tree and delete from page");
+    return new Pair<>(0, 0);
+  }
+
+  /**
+   * delete all records in the pages.
+   *
+   * @param transactionId transaction Id
+   * @return pair left is the next page id, pair right is the result of {@code
+   *     maxRecordInPage.compareTo(searchKey)}
+   */
+  public Pair<Integer, Integer> deleteAll(long transactionId) {
+    System.out.println("enter delete all");
+    return new Pair<>(0, 0);
   }
 }

@@ -172,5 +172,16 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
   public LogicalPlan visitShowTableStmt(SQLParser.ShowTableStmtContext ctx) {
     return new ShowTablePlan(ctx.tableName().getText());
   }
+
+  public LogicalPlan visitDeleteStmt(SQLParser.DeleteStmtContext ctx) {
+    String tableName = ctx.tableName().getText();
+
+    boolean useWhere = ctx.K_WHERE() != null;
+    SQLParser.ConditionContext condition_where =
+        useWhere ? ctx.multipleCondition().condition() : null;
+
+    return new DeletePlan(tableName, condition_where, useWhere);
+  }
+
   // TODO: parser to more logical plan
 }
