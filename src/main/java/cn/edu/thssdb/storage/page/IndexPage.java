@@ -647,7 +647,7 @@ public class IndexPage extends Page {
   private void insertDataRecordInternal(
       long transactionId, RecordLogical recordToBeInserted, RecordInPage previousRecord) {
 
-    ServerRuntime.getTwoPhaseLock(transactionId, this.pageReadAndWriteLatch.writeLock());
+    ServerRuntime.getWriteLock(transactionId, this.pageReadAndWriteLatch);
     // TODO: deleted scenarios
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
 
@@ -918,8 +918,8 @@ public class IndexPage extends Page {
     IndexPage leftPage = createIndexPage(transactionId, this.spaceId, leftPageId);
     IndexPage rightPage = createIndexPage(transactionId, this.spaceId, rightPageId);
     if (requireLock) {
-      ServerRuntime.getTwoPhaseLock(transactionId, leftPage.pageReadAndWriteLatch.writeLock());
-      ServerRuntime.getTwoPhaseLock(transactionId, rightPage.pageReadAndWriteLatch.writeLock());
+      ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch);
+      ServerRuntime.getWriteLock(transactionId, rightPage.pageReadAndWriteLatch);
     }
 
     RecordInPage leftPageSupremeRecord = leftPage.infimumRecord.nextRecordInPage;
@@ -988,7 +988,7 @@ public class IndexPage extends Page {
    */
   public boolean splitMyself(long transactionId, Stack<IndexPage> ancestors, boolean requireLock) {
     if (requireLock) {
-      ServerRuntime.getTwoPhaseLock(transactionId, this.pageReadAndWriteLatch.writeLock());
+      ServerRuntime.getWriteLock(transactionId, this.pageReadAndWriteLatch);
     }
     if (isRoot()) {
       return splitRoot(transactionId, requireLock);
@@ -1009,7 +1009,7 @@ public class IndexPage extends Page {
     }
     IndexPage rightPage = createIndexPage(transactionId, this.spaceId, rightPageId);
     if (requireLock) {
-      ServerRuntime.getTwoPhaseLock(transactionId, rightPage.pageReadAndWriteLatch.writeLock());
+      ServerRuntime.getWriteLock(transactionId, rightPage.pageReadAndWriteLatch);
     }
     RecordInPage rightPageSupremeRecord = rightPage.infimumRecord.nextRecordInPage;
     RecordInPage maxRecordInRight =
@@ -1294,9 +1294,9 @@ public class IndexPage extends Page {
       } else break;
     } while (true);
 
-    // TODO: ServerRuntime.getTwoPhaseLock(transactionId,
-    // currentPage.pageReadAndWriteLatch.readLock());
+    ServerRuntime.getReadLock(transactionId, this.pageReadAndWriteLatch);
     result = currentPage.scanInternal(transactionId, searchKey);
+    ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
     //     TODO: check if deleted
     currentPage.bLinkTreeLatch.unlock();
 
@@ -1349,6 +1349,7 @@ public class IndexPage extends Page {
    *     explained above.
    */
   public Pair<Boolean, RecordInPage> scanInternal(long transactionId, ValueWrapper[] searchKey) {
+    //    ServerRuntime.getReadLock(transactionId, this.pageReadAndWriteLatch);
     RecordInPage record = infimumRecord.nextRecordInPage;
     RecordInPage previousRecord = infimumRecord;
     while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
@@ -1363,8 +1364,10 @@ public class IndexPage extends Page {
       record = record.nextRecordInPage;
     }
     if (record.nextAbsoluteOffset == 0) {
+      //      ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
       return new Pair<>(false, previousRecord);
     } else {
+      //      ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
       return new Pair<>(false, record);
     }
   }
