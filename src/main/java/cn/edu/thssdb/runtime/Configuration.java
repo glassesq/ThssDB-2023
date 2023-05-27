@@ -2,7 +2,7 @@ package cn.edu.thssdb.runtime;
 
 public class Configuration {
 
-  public String testPath = "D:\\项目\\tmp";
+  public String testPath = "C:\\Users\\Maxwell-Cat\\Desktop\\test";
 
   public String MetadataFilename = testPath + "/" + "example.json";
   public String WALFilename = testPath + "/" + "WAL.log";
@@ -26,11 +26,18 @@ public class Configuration {
    */
   public boolean auto_commit;
 
+  /**
+   * When {@code serializable} is set to true, the database will use serializable isolation level.
+   * Otherwise, the database will use read committed isolation level.
+   */
+  public boolean serializable;
+
   public final int maxCharsetLength = 4;
 
   public Configuration() {
     allow_implicit_transaction = true;
     auto_commit = true;
+    serializable = false;
 
     /* conflict test */
     // TODO: assert (!(allow_implicit_transaction && auto_commit));

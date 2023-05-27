@@ -14,6 +14,7 @@ import java.util.HashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * The runtime of the database server. Every member variable and function shall be static in this
@@ -50,14 +51,40 @@ public class ServerRuntime {
   public static final Configuration config = new Configuration();
 
   /**
-   * transaction get a lock
+   * transaction get a two phase lock
    *
    * @param transactionId transaction id
    * @param lock lock
    */
-  public static void getLock(long transactionId, Lock lock) {
+  public static void getTwoPhaseLock(long transactionId, Lock lock) {
     lock.lock();
     locks.get(transactionId).add(lock);
+  }
+
+  /**
+   * transaction get a read lock
+   *
+   * @param transactionId transaction id
+   * @param lock lock
+   */
+  public static void getReadLock(long transactionId, ReentrantReadWriteLock lock) {
+    if (config.serializable) {
+      getTwoPhaseLock(transactionId, lock.readLock());
+    }
+    else {
+      lock.readLock().lock();
+    }
+  }
+
+  /**
+   * release a read lock when serializable is off
+   *
+   * @param lock lock
+   */
+  public static void releaseReadLock(ReentrantReadWriteLock lock) {
+    if (!config.serializable) {
+        lock.readLock().unlock();
+    }
   }
 
   /**

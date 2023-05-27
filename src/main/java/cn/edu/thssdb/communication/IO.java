@@ -27,7 +27,6 @@ public class IO {
    * @return not parsed Page
    */
   public static Page read(int spaceId, int pageId) throws Exception {
-    // TODO: Two-Phase Lock shall be implemented with transactionId
     return DiskBuffer.read(spaceId, pageId);
   }
 
@@ -44,7 +43,6 @@ public class IO {
    */
   public static void write(
       long transactionId, Page page, int offset, int length, byte[] newValue, boolean redo_only) {
-    // TODO: Two-phase Lock
 
     /* Write the changes to disk buffer */
     /* Latch for page reading is not needed because of our design avoid reading from bytes directly. */
