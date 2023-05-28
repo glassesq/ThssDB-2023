@@ -191,6 +191,26 @@ public class SessionRuntime {
           response =
               new ExecuteStatementResp(StatusUtil.success("delete operation completed"), false);
           break;
+        case UPDATE:
+          UpdatePlan updatePlan = (UpdatePlan) plan;
+          if (updatePlan.broken)
+            return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+          Table.TableMetadata updateMetadata =
+              currentDatabaseMetadata.getTableByName(updatePlan.tableName);
+          if (updateMetadata == null)
+            return new ExecuteStatementResp(
+                StatusUtil.fail("Table " + updatePlan.tableName + " not found."), false);
+          System.out.println("UPDATE starting");
+          boolean updateResult = updatePlan.doUpdate(transactionId, updateMetadata);
+          System.out.println("UPDATE finished");
+          response =
+              new ExecuteStatementResp(StatusUtil.success("update operation completed"), false);
+          if (!updateResult)
+            response.status.msg =
+                "Update Rejected! No changes occur because of the constraint violation.\n"
+                    + response.status.msg;
+          break;
+
         default:
       }
 

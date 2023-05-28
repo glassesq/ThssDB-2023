@@ -18,7 +18,6 @@
  */
 package cn.edu.thssdb.benchmark.generator;
 
-import cn.edu.thssdb.benchmark.common.Constants;
 import cn.edu.thssdb.benchmark.common.DataType;
 import cn.edu.thssdb.benchmark.common.TableSchema;
 
@@ -26,9 +25,6 @@ import java.util.Arrays;
 import java.util.List;
 
 public class TransactionDataGenerator extends BaseDataGenerator {
-
-  private String stringFormat = "%0" + Constants.stringLength + "d";
-
   @Override
   protected void initTableSchema() {
     List<String> columns = Arrays.asList("id", "count");

@@ -27,8 +27,6 @@ import java.util.List;
 
 public class ConcurrentDataGenerator extends BaseDataGenerator {
 
-  private String stringFormat = "%0" + Constants.stringLength + "d";
-
   @Override
   protected void initTableSchema() {
     List<String> columns = new ArrayList<>();

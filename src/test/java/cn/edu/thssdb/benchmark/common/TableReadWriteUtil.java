@@ -46,7 +46,8 @@ public class TableReadWriteUtil {
   public static void queryAndCheckData(
       TableSchema tableSchema, Client client, BaseDataGenerator dataGenerator, int rowNum)
       throws TException {
-    String querySql = "select * from " + tableSchema.tableName + ";";
+    String querySql =
+        "select " + String.join(",", tableSchema.columns) + " from " + tableSchema.tableName + ";";
     ExecuteStatementResp resp = client.executeStatement(querySql);
     LOGGER.info(querySql);
     Assert.assertEquals(Constants.SUCCESS_STATUS_CODE, resp.status.code);
@@ -79,7 +80,11 @@ public class TableReadWriteUtil {
         if (dataItem == null) {
           Assert.assertEquals("null", resp.rowList.get(i).get(j));
         } else {
-          Assert.assertEquals(dataItem.toString(), resp.rowList.get(i).get(j));
+          if (dataItem instanceof String) {
+            Assert.assertEquals(dataItem, "'" + resp.rowList.get(i).get(j) + "'");
+          } else {
+            Assert.assertEquals(dataItem.toString(), resp.rowList.get(i).get(j));
+          }
         }
       }
     }

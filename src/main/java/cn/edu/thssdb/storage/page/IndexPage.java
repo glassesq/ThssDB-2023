@@ -56,6 +56,10 @@ public class IndexPage extends Page {
       return true;
     }
 
+    public void unsetDeleted() {
+      flags &= ~DELETE_FLAG;
+    }
+
     public boolean isDeleted() {
       return (flags & DELETE_FLAG) != 0;
     }
@@ -416,9 +420,13 @@ public class IndexPage extends Page {
     }
   }
 
-  /** @deprecated */
+  /**
+   * @deprecated
+   */
   public int pageLevel = 0;
-  /** @deprecated */
+  /**
+   * @deprecated
+   */
   public int numberDirectory = 0;
 
   public int freespaceStart = 64;
@@ -785,9 +793,8 @@ public class IndexPage extends Page {
       } else break;
     } while (true);
 
-    //    System.out.println("insert here ********************************" + result.right);
-
-    if (result.left) return false;
+    System.out.println("result.left: " + result.left);
+    System.out.println("insert here ********************************" + result.right);
 
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
     int maxLength = metadata.getMaxRecordLength(RecordInPage.USER_DATA_RECORD);
@@ -1425,7 +1432,8 @@ public class IndexPage extends Page {
     Boolean isSatisfied(RecordInPage record);
   }
 
-  public int deleteFromLeftmostDataPage(long transactionId, recordCondition condition) {
+  public int deleteFromLeftmostDataPage(
+      long transactionId, recordCondition condition, ArrayList<RecordInPage> recordDeleted) {
     if (this.pageId != ServerRuntime.config.indexRootPageIndex) {
       /* only root page can have access to this method. */
       return -1;
@@ -1449,6 +1457,7 @@ public class IndexPage extends Page {
           if (condition.isSatisfied(record)) {
             if (record.setDeleted()) {
               isChanged = true;
+              if (recordDeleted != null) recordDeleted.add(record);
               record.write(transactionId, this, record.myOffset);
             }
           }
@@ -1475,7 +1484,8 @@ public class IndexPage extends Page {
    * @param transactionId transaction Id
    * @param condition condition
    */
-  public int deleteWithCondition(long transactionId, recordCondition condition) {
+  public int deleteWithCondition(
+      long transactionId, recordCondition condition, ArrayList<RecordInPage> recordsDeleted) {
 
     System.out.println("delete with condition start");
 
@@ -1488,6 +1498,7 @@ public class IndexPage extends Page {
         if (condition.isSatisfied(record)) {
           if (record.setDeleted()) {
             isChanged = true;
+            if (recordsDeleted != null) recordsDeleted.add(record);
             record.write(transactionId, this, record.myOffset);
             System.out.println("record delete" + record);
           } else {
@@ -1511,7 +1522,10 @@ public class IndexPage extends Page {
    * @param condition condition
    */
   public Pair<Integer, Integer> deleteWithPrimaryCondition(
-      long transactionId, recordCondition condition, ValueWrapper[] searchKey) {
+      long transactionId,
+      recordCondition condition,
+      ValueWrapper[] searchKey,
+      ArrayList<RecordInPage> recordDeleted) {
     System.out.println("enter delete with primary condition");
     /* This must be a data page. */
     this.bLinkTreeLatch.lock();
@@ -1526,6 +1540,7 @@ public class IndexPage extends Page {
         if (condition.isSatisfied(record)) {
           if (record.setDeleted()) {
             isChanged = true;
+            if (recordDeleted != null) recordDeleted.add(record);
             record.write(transactionId, this, record.myOffset);
           }
         }
@@ -1546,8 +1561,9 @@ public class IndexPage extends Page {
    *
    * @param transactionId transaction Id
    * @param searchKey search key
+   * @return if the value is deleted
    */
-  public void scanTreeAndDeleteRecordWithKey(long transactionId, ValueWrapper[] searchKey)
+  public RecordLogical scanTreeAndDeleteRecordWithKey(long transactionId, ValueWrapper[] searchKey)
       throws Exception {
 
     Pair<Boolean, RecordInPage> result;
@@ -1561,12 +1577,14 @@ public class IndexPage extends Page {
       } else break;
     } while (true);
 
+    boolean isChanged = false;
+    boolean notExistOrFound = false;
+    RecordLogical recordDeleted = null;
+
     do {
       currentPage.bLinkTreeLatch.lock();
 
       RecordInPage record = currentPage.infimumRecord;
-      boolean isChanged = false;
-      boolean notExistOrFound = false;
       while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
         if (record.recordType != RecordInPage.SYSTEM_INFIMUM_RECORD) {
           int compareResult = ValueWrapper.compareArray(record.primaryKeyValues, searchKey);
@@ -1582,9 +1600,11 @@ public class IndexPage extends Page {
                 if (record.setDeleted()) {
                   isChanged = true;
                   notExistOrFound = true;
+                  recordDeleted = new RecordLogical(record);
                   record.write(transactionId, currentPage, record.myOffset);
                   System.out.println("record delete" + record);
                 }
+                notExistOrFound = true;
               }
             }
             break;
@@ -1606,6 +1626,7 @@ public class IndexPage extends Page {
 
     // TODO: 2PL write lock
     currentPage.bLinkTreeLatch.unlock();
+    return recordDeleted;
   }
 
   /**
@@ -1619,7 +1640,11 @@ public class IndexPage extends Page {
    *     maxRecordInPage.compareTo(searchKey)};
    */
   public Pair<Integer, Integer> scanTreeAndDeleteFromPage(
-      long transactionId, ValueWrapper[] searchKey, recordCondition condition) throws Exception {
+      long transactionId,
+      ValueWrapper[] searchKey,
+      recordCondition condition,
+      ArrayList<RecordInPage> recordsDeleted)
+      throws Exception {
 
     Pair<Boolean, RecordInPage> result;
     IndexPage currentPage = this;
@@ -1656,6 +1681,7 @@ public class IndexPage extends Page {
         if (condition.isSatisfied(record)) {
           if (record.setDeleted()) {
             isChanged = true;
+            if (recordsDeleted != null) recordsDeleted.add(record);
             record.write(transactionId, this, record.myOffset);
             System.out.println("record delete" + record);
           } else {
@@ -1686,7 +1712,7 @@ public class IndexPage extends Page {
    * @return pair left is the next page id, pair right is the result of {@code
    *     maxRecordInPage.compareTo(searchKey)}
    */
-  public int deleteAll(long transactionId) {
+  public int deleteAll(long transactionId, ArrayList<RecordInPage> recordDeleted) {
     bLinkTreeLatch.lock();
 
     // TODO: write lock
@@ -1696,6 +1722,7 @@ public class IndexPage extends Page {
       if (record.recordType != RecordInPage.SYSTEM_INFIMUM_RECORD) {
         if (record.setDeleted()) {
           isChanged = true;
+          if (recordDeleted != null) recordDeleted.add(record);
           record.write(transactionId, this, record.myOffset);
         }
       }

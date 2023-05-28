@@ -6,9 +6,39 @@ public class RecordLogical {
   public ValueWrapper[] primaryKeyValues;
   public ValueWrapper[] nonPrimaryKeyValues;
 
+  public RecordLogical(RecordLogical record) {
+    int primaryKeyNumber = record.primaryKeyValues.length;
+    primaryKeyValues = new ValueWrapper[primaryKeyNumber];
+    for (int i = 0; i < primaryKeyNumber; i++) {
+      primaryKeyValues[i] = new ValueWrapper(record.primaryKeyValues[i]);
+    }
+    int nonPrimaryKeyNumber = record.nonPrimaryKeyValues.length;
+    nonPrimaryKeyValues = new ValueWrapper[nonPrimaryKeyNumber];
+    for (int i = 0; i < nonPrimaryKeyNumber; i++) {
+      nonPrimaryKeyValues[i] = new ValueWrapper(record.nonPrimaryKeyValues[i]);
+    }
+  }
+
   public RecordLogical(Table.TableMetadata metadata) {
     primaryKeyValues = new ValueWrapper[metadata.getPrimaryKeyNumber()];
     nonPrimaryKeyValues = new ValueWrapper[metadata.getNonPrimaryKeyNumber()];
+  }
+
+  public RecordLogical(IndexPage.RecordInPage record) {
+    int primaryKeyNumber = record.primaryKeyValues.length;
+    primaryKeyValues = new ValueWrapper[primaryKeyNumber];
+    for (int i = 0; i < primaryKeyNumber; i++) {
+      primaryKeyValues[i] = new ValueWrapper(record.primaryKeyValues[i]);
+    }
+    if (record.recordType == IndexPage.RecordInPage.USER_DATA_RECORD) {
+      int nonPrimaryKeyNumber = record.nonPrimaryKeyValues.length;
+      nonPrimaryKeyValues = new ValueWrapper[nonPrimaryKeyNumber];
+      for (int i = 0; i < nonPrimaryKeyNumber; i++) {
+        nonPrimaryKeyValues[i] = new ValueWrapper(record.nonPrimaryKeyValues[i]);
+      }
+    } else {
+      nonPrimaryKeyValues = new ValueWrapper[0];
+    }
   }
 
   public RecordLogical(IndexPage.RecordInPage record, Table.TableMetadata metadata) {

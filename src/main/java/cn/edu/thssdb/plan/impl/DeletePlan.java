@@ -20,7 +20,6 @@ public class DeletePlan extends LogicalPlan {
   public ValueWrapper queryValue;
   public Column queryCol;
   public SQLParser.ComparatorContext cmp_where;
-  public QueryResult res;
   public long transactionId = -1;
 
   public Table.TableMetadata tableMetadata;
@@ -28,7 +27,6 @@ public class DeletePlan extends LogicalPlan {
   public void initialization(Table.TableMetadata table) {
     this.tableMetadata = table;
     System.out.println("delete initialization start");
-    res = new QueryResult();
     System.out.println("useWhere = " + useWhere);
     if (useWhere) {
       String keyName = L_where.columnName().getText();
@@ -54,14 +52,14 @@ public class DeletePlan extends LogicalPlan {
                 getRecordInPageValue(recordInPage, queryCol.primary), queryValue, cmp_where);
 
     Pair<Integer, Integer> pageIter = new Pair<>(null, null);
-    pageIter.left = rootPage.deleteFromLeftmostDataPage(transactionId, condition);
+    pageIter.left = rootPage.deleteFromLeftmostDataPage(transactionId, condition, null);
     IndexPage rightPage;
 
     ValueWrapper[] query = {queryValue};
 
     while (pageIter.left > 0) {
       rightPage = (IndexPage) IO.read(table.spaceId, pageIter.left);
-      pageIter = rightPage.deleteWithPrimaryCondition(transactionId, condition, query);
+      pageIter = rightPage.deleteWithPrimaryCondition(transactionId, condition, query, null);
       if (pageIter.right > 0) break;
     }
   }
@@ -76,17 +74,17 @@ public class DeletePlan extends LogicalPlan {
                 getRecordInPageValue(recordInPage, queryCol.primary), queryValue, cmp_where);
 
     Pair<Integer, Integer> pageResult =
-        rootPage.scanTreeAndDeleteFromPage(transactionId, query, condition);
+        rootPage.scanTreeAndDeleteFromPage(transactionId, query, condition, null);
     IndexPage rightPage;
 
     boolean deleteAll = false;
     while (pageResult.left > 0) {
       if (deleteAll) {
         rightPage = (IndexPage) IO.read(table.spaceId, pageResult.left);
-        pageResult.left = rightPage.deleteAll(transactionId);
+        pageResult.left = rightPage.deleteAll(transactionId, null);
       } else {
         rightPage = (IndexPage) IO.read(table.spaceId, pageResult.left);
-        pageResult = rightPage.deleteWithPrimaryCondition(transactionId, condition, query);
+        pageResult = rightPage.deleteWithPrimaryCondition(transactionId, condition, query, null);
         if (pageResult.right < 0) deleteAll = true;
       }
     }
@@ -122,13 +120,12 @@ public class DeletePlan extends LogicalPlan {
       condition = (recordInPage) -> true;
     }
 
-    int pageIter = rootPage.deleteFromLeftmostDataPage(transactionId, condition);
+    int pageIter = rootPage.deleteFromLeftmostDataPage(transactionId, condition, null);
     IndexPage rightpage;
     while (pageIter > 0) {
       rightpage = (IndexPage) IO.read(table.spaceId, pageIter);
-      pageIter = rightpage.deleteWithCondition(transactionId, condition);
+      pageIter = rightpage.deleteWithCondition(transactionId, condition, null);
     }
-    ;
   }
 
   public ValueWrapper getRecordInPageValue(IndexPage.RecordInPage record, int primary) {

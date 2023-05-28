@@ -171,7 +171,7 @@ public class CRUDTestExecutor extends TestExecutor {
     expectedResult = new HashSet<>();
     for (List<Object> leftRowData : leftTableData) {
       for (List<Object> rightRowData : rightTableData) {
-        if (leftRowData.get(1) == rightRowData.get(1)) {
+        if (leftRowData.get(1).equals(rightRowData.get(1))) {
           List<Object> resultRowData = new ArrayList<>();
           resultRowData.add(leftRowData.get(1));
           resultRowData.add(leftRowData.get(2));
@@ -201,7 +201,7 @@ public class CRUDTestExecutor extends TestExecutor {
     expectedResult = new HashSet<>();
     for (List<Object> leftRowData : leftTableData) {
       for (List<Object> rightRowData : rightTableData) {
-        if (leftRowData.get(1) == rightRowData.get(1) && (long) leftRowData.get(1) == 5) {
+        if (leftRowData.get(1).equals(rightRowData.get(1)) && (long) leftRowData.get(1) == 5) {
           List<Object> resultRowData = new ArrayList<>();
           resultRowData.add(leftRowData.get(1));
           resultRowData.add(leftRowData.get(2));
@@ -230,7 +230,7 @@ public class CRUDTestExecutor extends TestExecutor {
     expectedResult = new HashSet<>();
     for (List<Object> leftRowData : leftTableData) {
       for (List<Object> rightRowData : rightTableData) {
-        if (leftRowData.get(1) == rightRowData.get(1) && (double) leftRowData.get(3) == 5) {
+        if (leftRowData.get(1).equals(rightRowData.get(1)) && (double) leftRowData.get(3) == 5) {
           List<Object> resultRowData = new ArrayList<>();
           resultRowData.add(leftRowData.get(1));
           resultRowData.add(leftRowData.get(3));
@@ -264,7 +264,7 @@ public class CRUDTestExecutor extends TestExecutor {
     List<Integer> columnList = new ArrayList<>();
     columnList.add(1);
     columnList.add(2);
-    Set<List<Object>> expectedResult = extractData(dataMap.get("test_table1"), columnList);
+    Set<List<Object>> expectedResult = extractData(dataMap.get("test_table2"), columnList);
 
     Assert.assertTrue(equals(queryResult, expectedResult));
 
@@ -289,7 +289,7 @@ public class CRUDTestExecutor extends TestExecutor {
     columnList.clear();
     columnList.add(2);
     columnList.add(3);
-    expectedResult = extractData(dataMap.get("test_table1"), columnList);
+    expectedResult = extractData(dataMap.get("test_table3"), columnList);
 
     Assert.assertTrue(equals(queryResult, expectedResult));
   }
@@ -319,9 +319,9 @@ public class CRUDTestExecutor extends TestExecutor {
   private boolean check(String type, Object expectValue, String actualValue) {
     switch (type) {
       case "int":
-        return expectValue == Integer.valueOf(actualValue);
+        return expectValue.equals(Integer.valueOf(actualValue));
       case "long":
-        return expectValue == Long.valueOf(actualValue);
+        return expectValue.equals(Long.valueOf(actualValue));
       case "float":
         return Objects.equals(expectValue, Float.valueOf(actualValue));
       case "double":

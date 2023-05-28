@@ -8,9 +8,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SimpleDataGenerator extends BaseDataGenerator {
-
-  private String stringFormat = "%0" + Constants.stringLength + "d";
-
   @Override
   protected void initTableSchema() {
     for (int tableId = 0; tableId < Constants.tableCount; tableId++) {

@@ -12,7 +12,6 @@ public class PerformanceDataGenerator extends BaseDataGenerator {
 
   private int tableNum;
   private int columnNum = 10;
-  private String stringFormat = "%0" + Constants.stringLength + "d";
   private Random random = new Random(666);
 
   public PerformanceDataGenerator(int tableNum) {

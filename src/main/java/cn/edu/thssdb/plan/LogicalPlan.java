@@ -21,6 +21,7 @@ public abstract class LogicalPlan {
     SHOW_TABLE,
     INSERT,
     SELECT,
-    DELETE
+    DELETE,
+    UPDATE
   }
 }

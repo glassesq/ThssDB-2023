@@ -1,5 +1,6 @@
 package cn.edu.thssdb.benchmark.generator;
 
+import cn.edu.thssdb.benchmark.common.Constants;
 import cn.edu.thssdb.benchmark.common.TableSchema;
 
 import java.io.Serializable;
@@ -8,6 +9,7 @@ import java.util.Map;
 
 public abstract class BaseDataGenerator {
 
+  protected String stringFormat = "'%0" + Constants.stringLength + "d'";
   protected Map<String, TableSchema> schemaMap = new HashMap<>();
 
   public BaseDataGenerator() {
