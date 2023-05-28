@@ -171,7 +171,7 @@ public class SessionRuntime {
             response.addToRowList(row);
             int i = 0;
             for (String e : row) {
-              System.out.println(result.columns.get(i) + e);
+              //              System.out.println(result.columns.get(i) + e);
               ++i;
             }
           }

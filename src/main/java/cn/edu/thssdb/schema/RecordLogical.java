@@ -34,12 +34,12 @@ public class RecordLogical {
     for (ValueWrapper value : primaryKeyValues) {
       result.append(value);
       result.append(" [primary]\n");
-      System.out.println(value.toRawString());
+      //      System.out.println(value.toRawString());
     }
     for (ValueWrapper value : nonPrimaryKeyValues) {
       result.append(value);
       result.append(" [non-primary]\n");
-      System.out.println(value.toRawString());
+      //      System.out.println(value.toRawString());
     }
     return result.toString();
   }

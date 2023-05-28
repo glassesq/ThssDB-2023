@@ -56,7 +56,7 @@ public class ServerRuntime {
    * @param transactionId transaction id
    * @param lock lock
    */
-  public static void getTwoPhaseLock(long transactionId, Lock lock) {
+  private static void getTwoPhaseLock(long transactionId, Lock lock) {
     lock.lock();
     locks.get(transactionId).add(lock);
   }
@@ -68,6 +68,7 @@ public class ServerRuntime {
    * @param lock lock
    */
   public static void getWriteLock(long transactionId, ReentrantReadWriteLock lock) {
+    System.out.println(transactionId + " get write lock");
     while (lock.getReadLockCount() > 0) {
       lock.readLock().unlock();
       locks.get(transactionId).remove(lock.readLock());
@@ -82,6 +83,7 @@ public class ServerRuntime {
    * @param lock lock
    */
   public static void getReadLock(long transactionId, ReentrantReadWriteLock lock) {
+    System.out.println(transactionId + " get read lock");
     if (config.serializable) {
       getTwoPhaseLock(transactionId, lock.readLock());
     } else {
@@ -95,7 +97,7 @@ public class ServerRuntime {
    * @param lock lock
    */
   public static void releaseReadLock(ReentrantReadWriteLock lock) {
-    if (!config.serializable) {
+    if (!config.serializable && lock.getReadLockCount() > 0) {
       lock.readLock().unlock();
     }
   }
@@ -106,10 +108,11 @@ public class ServerRuntime {
    * @param transactionId transaction id
    */
   public static void releaseAllLocks(long transactionId) {
-    for (Lock lock : locks.get(transactionId)) {
-      lock.unlock();
-    }
-    locks.remove(transactionId);
+    System.out.println(transactionId + " release all locks " + locks.get(transactionId).size());
+    //    for (Lock lock : locks.get(transactionId)) {
+    //      lock.unlock();
+    //    }
+    //    locks.remove(transactionId);
   }
 
   /**

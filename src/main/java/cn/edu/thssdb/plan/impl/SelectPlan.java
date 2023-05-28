@@ -43,7 +43,7 @@ public class SelectPlan extends LogicalPlan {
     System.out.println(columns.size());
     for (SQLParser.ColumnFullNameContext column : columns) {
       res.columns.add(column.getText());
-      System.out.print(column.getText() + ',');
+      //      System.out.print(column.getText() + ',');
       for (Table.TableMetadata table : tables) {
         if (tables.size() == 1 || table.name.equals(column.tableName().getText())) {
           String keyName = column.columnName().getText();
@@ -51,7 +51,7 @@ public class SelectPlan extends LogicalPlan {
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + table.name + "'");
           colInTable.add(table.getColumnDetailByName(keyName));
-          System.out.println(table.getColumnDetailByName(keyName).toString());
+          //          System.out.println(table.getColumnDetailByName(keyName).toString());
           break;
         }
       }
@@ -100,11 +100,11 @@ public class SelectPlan extends LogicalPlan {
 
   public ArrayList<String> applyProjection(RecordLogical record) {
     ArrayList<String> result = new ArrayList<>();
-    System.out.println("---Proj---");
-    System.out.println(columns.size());
+    //    System.out.println("---Proj---");
+    //    System.out.println(columns.size());
     for (int i = 0; i < columns.size(); ++i)
       result.add(getRecordValue(record, colInTable.get(i).primary).toString());
-    System.out.println("+++Proj+++");
+    //    System.out.println("+++Proj+++");
     return result;
   }
 
@@ -175,7 +175,7 @@ public class SelectPlan extends LogicalPlan {
   }
 
   public QueryResult getCondition(Table.TableMetadata table) throws Exception {
-    System.out.println("getCondition");
+    //    System.out.println("getCondition");
     IndexPage rootPage =
         (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
     Pair<Integer, ArrayList<RecordLogical>> pageIter = rootPage.getLeftmostDataPage(transactionId);
@@ -260,9 +260,10 @@ public class SelectPlan extends LogicalPlan {
     for (RecordLogical record : allRecordLogical) {
       if (useWhere)
         if (L_where.tableName().getText().equals(page.left.name)) {
-          System.out.println(L_where.getText());
+          //          System.out.println(L_where.getText());
           ValueWrapper recordValue = getRecordValue(record, queryCol.primary);
-          System.out.println(recordValue.toString() + cmp_where.getText() + queryValue.toString());
+          //          System.out.println(recordValue.toString() + cmp_where.getText() +
+          // queryValue.toString());
           if (!checkCondition(recordValue, queryValue, cmp_where)) continue;
         }
       if (useJoin) {
@@ -333,7 +334,7 @@ public class SelectPlan extends LogicalPlan {
       throws Exception {
     this.transactionId = transactionId;
     initialization(tables);
-    System.out.println("initialization finished.");
+    //    System.out.println("initialization finished.");
     if (!useJoin) {
       if (!useWhere) {
         return getCondition(tables.get(0));
