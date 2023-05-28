@@ -4,7 +4,6 @@ import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.storage.page.OverallPage;
-import cn.edu.thssdb.utils.Pair;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -279,7 +278,7 @@ public class Table {
     public void initTablespaceFile(long transactionId) throws Exception {
       /* Tablespace File Creation */
       String tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
-      System.out.println(tablespaceFilename);
+      //      System.out.println(tablespaceFilename);
 
       File tablespaceFile = new File(tablespaceFilename);
       // TODO: delete file if already existed.
@@ -331,13 +330,14 @@ public class Table {
         throw new Exception("The primary key value is already existed.");
       }
 
-      Pair<Integer, ArrayList<RecordLogical>> records = rootPage.getLeftmostDataPage(transactionId);
-      System.out.println("******************* values currently in rootPage:");
-      System.out.println("******************* next Page is:" + records.left);
-      for (RecordLogical recordLogical : records.right) {
-        System.out.println(recordLogical);
-      }
-      System.out.println("**************************************************");
+      //      Pair<Integer, ArrayList<RecordLogical>> records =
+      // rootPage.getLeftmostDataPage(transactionId);
+      //      System.out.println("******************* values currently in rootPage:");
+      //      System.out.println("******************* next Page is:" + records.left);
+      //      for (RecordLogical recordLogical : records.right) {
+      //        System.out.println(recordLogical);
+      //      }
+      //      System.out.println("**************************************************");
     }
   }
 

@@ -2,7 +2,6 @@ package cn.edu.thssdb.plan.impl;
 
 import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.plan.LogicalPlan;
-import cn.edu.thssdb.query.QueryResult;
 import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.schema.Column;
 import cn.edu.thssdb.schema.Table;
