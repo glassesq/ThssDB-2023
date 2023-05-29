@@ -197,5 +197,10 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
     return new UpdatePlan(tableName, columnNameToSet, valueToSet, condition_where, useWhere);
   }
 
+  public LogicalPlan visitDropDbStmt(SQLParser.DropDbStmtContext ctx) {
+    String databaseName = ctx.databaseName().getText();
+    return new DropDatabasePlan(databaseName);
+  }
+
   // TODO: parser to more logical plan
 }

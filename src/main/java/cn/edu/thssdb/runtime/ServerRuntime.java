@@ -123,6 +123,15 @@ public class ServerRuntime {
       lock.unlock();
     }
     locks.remove(transactionId);
+    // TODO: to fix, try catch is just to make it work FOR NOW!!!
+    try {
+      Database.DatabaseMetadata.metaDataLatch.readLock().unlock();
+    } catch (Exception ignored) {
+    }
+    try {
+      Database.DatabaseMetadata.metaDataLatch.writeLock().unlock();
+    } catch (Exception ignored) {
+    }
   }
 
   /**

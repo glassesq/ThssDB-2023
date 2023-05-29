@@ -140,7 +140,7 @@ public class IO {
         name.getBytes(StandardCharsets.UTF_8));
   }
 
-  public static void writeDeleteDatabase(long transactionId, String name, int databaseId)
+  public static void writeDropDatabase(long transactionId, String name, int databaseId)
       throws Exception {
     WriteLog.addSpecialDatabaseLog(
         transactionId,

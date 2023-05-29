@@ -11,6 +11,8 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+import static java.lang.System.exit;
+
 /**
  * Table class. The lifetime of this {@code Table} class object shall be only within the transaction
  * that requested the Table. Multiple transactions may run on same Table. They obtain different
@@ -245,6 +247,7 @@ public class Table {
 
       for (int i = 0; i < metadata.columnObjectArray.length(); i++) {
         Column column = Column.parse(metadata.columnObjectArray.getJSONObject(i));
+        if (column == null) exit(0);
         String name = metadata.columnObjectArray.getJSONObject(i).getString("columnName");
 
         metadata.columnNames.put(name, column.primary);
@@ -301,7 +304,7 @@ public class Table {
      *     nonPrimaryKeys).
      * @throws Exception the primary key is existed.
      */
-    public void insertRecord(long transactionId, ArrayList<String> values) throws Exception {
+    public boolean insertRecord(long transactionId, ArrayList<String> values) throws Exception {
       RecordLogical recordToBeInserted = new RecordLogical(this);
 
       int primaryKeyNumber = getPrimaryKeyNumber();
@@ -326,9 +329,7 @@ public class Table {
           (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexRootPageIndex);
 
       boolean result = rootPage.insertDataRecordIntoTree(transactionId, recordToBeInserted);
-      if (!result) {
-        throw new Exception("The primary key value is already existed.");
-      }
+      return result;
 
       //      Pair<Integer, ArrayList<RecordLogical>> records =
       // rootPage.getLeftmostDataPage(transactionId);

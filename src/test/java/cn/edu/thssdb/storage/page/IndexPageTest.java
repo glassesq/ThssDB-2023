@@ -13,6 +13,7 @@ import org.junit.Test;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static org.junit.Assert.*;
 import static org.junit.Assert.assertFalse;
@@ -156,7 +157,11 @@ public class IndexPageTest {
     recordsInRoot.sort((a, b) -> ValueWrapper.compareArray(a.primaryKeyValues, b.primaryKeyValues));
 
     transactionId = ServerRuntime.newTransaction();
-    rootPage.splitRoot(transactionId, false);
+    ArrayList<ReentrantLock> locks = new ArrayList<>();
+    rootPage.splitRoot(transactionId, false, locks);
+    for (ReentrantLock lock : locks) {
+      lock.unlock();
+    }
     ServerRuntime.releaseAllLocks(transactionId);
 
     IndexPage testPage;
@@ -316,7 +321,11 @@ public class IndexPageTest {
 
     recordsInRoot.sort((a, b) -> ValueWrapper.compareArray(a.primaryKeyValues, b.primaryKeyValues));
 
-    rootPage.splitRoot(transactionId, false);
+    ArrayList<ReentrantLock> locks = new ArrayList<>();
+    rootPage.splitRoot(transactionId, false, locks);
+    for (ReentrantLock lock : locks) {
+      lock.unlock();
+    }
     Pair<Integer, ArrayList<RecordLogical>> splittingRootRecords =
         rootPage.getAllRecordLogical(transactionId);
     assertEquals(2, splittingRootRecords.right.size());

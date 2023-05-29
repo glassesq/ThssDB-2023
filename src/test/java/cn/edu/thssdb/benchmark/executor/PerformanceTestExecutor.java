@@ -35,7 +35,8 @@ public class PerformanceTestExecutor extends TestExecutor {
   private int CLIENT_NUMBER = 10;
   private int TABLE_NUMBER = 1;
   private int OPERATION_NUMBER = 500;
-  private String OPERATION_RATIO = "100:0:0:0:0";
+  private String OPERATION_RATIO = "80:0:0:10:10";
+  /* insert update delete query join */
 
   BaseDataGenerator dataGenerator;
   WeightedRandomPicker weightedRandomPicker;
@@ -119,6 +120,7 @@ public class PerformanceTestExecutor extends TestExecutor {
       }
       LOGGER.info(type + " per second: " + (totalNumber / (totalLatency / 1e9)));
       LOGGER.info(type + " sql per second: " + (totalPoint / (totalLatency / 1e9)));
+      return;
     }
   }
 

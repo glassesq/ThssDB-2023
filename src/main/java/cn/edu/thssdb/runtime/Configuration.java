@@ -7,7 +7,7 @@ public class Configuration {
   public String MetadataFilename = testPath + "/" + "example.json";
   public String WALFilename = testPath + "/" + "WAL.log";
 
-  public int pageSize = 2 * 1024;
+  public int pageSize = 1 * 1024;
 
   public final int overallPageIndex = 0;
   public final int indexRootPageIndex = 2;

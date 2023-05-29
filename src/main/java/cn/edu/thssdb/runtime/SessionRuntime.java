@@ -7,9 +7,12 @@ import cn.edu.thssdb.query.QueryResult;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import cn.edu.thssdb.schema.Database;
 import cn.edu.thssdb.schema.Table;
+import cn.edu.thssdb.utils.Global;
 import cn.edu.thssdb.utils.StatusUtil;
 
 import java.util.ArrayList;
+
+import static java.lang.System.exit;
 
 /** The runtime of one session. */
 public class SessionRuntime {
@@ -98,6 +101,18 @@ public class SessionRuntime {
                 new ExecuteStatementResp(
                     StatusUtil.success("Database " + name + " created."), false);
           break;
+        case DROP_DATABASE:
+          DropDatabasePlan dropDatabasePlan = (DropDatabasePlan) plan;
+          String dropDbName = dropDatabasePlan.getDatabaseName();
+          if (!Database.DatabaseMetadata.dropDatabase(transactionId, dropDbName))
+            response =
+                new ExecuteStatementResp(
+                    StatusUtil.fail("Database " + dropDbName + " not exists."), false);
+          else
+            response =
+                new ExecuteStatementResp(
+                    StatusUtil.success("Database " + dropDbName + " dropped."), false);
+          break;
         default:
       }
 
@@ -113,9 +128,13 @@ public class SessionRuntime {
         return response;
       }
 
+      // TODO: wrap databaseMetadata.get and add metadataLatch to protect it.
       Database.DatabaseMetadata currentDatabaseMetadata =
           ServerRuntime.databaseMetadata.get(databaseId);
       if (currentDatabaseMetadata == null) {
+        // TODO: roll back
+        ServerRuntime.releaseAllLocks(transactionId);
+        transactionId = -1;
         return new ExecuteStatementResp(
             StatusUtil.fail("There is no active database now. Please use a database first."),
             false);
@@ -124,11 +143,16 @@ public class SessionRuntime {
       switch (plan.getType()) {
         case CREATE_TABLE:
           CreateTablePlan createTablePlan = (CreateTablePlan) plan;
-          if (createTablePlan.broken)
-            return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+          if (createTablePlan.broken) {
+            response = new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+            break;
+          }
           String name = createTablePlan.tableMetadata.name;
-          if (currentDatabaseMetadata.getTableByName(name) != null)
-            return new ExecuteStatementResp(StatusUtil.fail("Table " + name + " existed."), false);
+          if (currentDatabaseMetadata.getTableByName(name) != null) {
+            response =
+                new ExecuteStatementResp(StatusUtil.fail("Table " + name + " existed."), false);
+            break;
+          }
           currentDatabaseMetadata.createTable(transactionId, createTablePlan.tableMetadata);
           response =
               new ExecuteStatementResp(StatusUtil.success("Table " + name + " created."), false);
@@ -137,32 +161,50 @@ public class SessionRuntime {
           ShowTablePlan showTablePlan = (ShowTablePlan) plan;
           Table.TableMetadata showTable =
               currentDatabaseMetadata.getTableByName(showTablePlan.tableName);
-          if (showTable == null)
-            return new ExecuteStatementResp(
-                StatusUtil.fail("Table " + showTablePlan.tableName + " not found."), false);
+          if (showTable == null) {
+            response =
+                new ExecuteStatementResp(
+                    StatusUtil.fail("Table " + showTablePlan.tableName + " not found."), false);
+            break;
+          }
           showTablePlan.getValue(showTable);
           response = new ExecuteStatementResp(StatusUtil.success(showTablePlan.toString()), false);
           break;
         case INSERT:
           InsertPlan insertPlan = (InsertPlan) plan;
-          if (insertPlan.broken)
-            return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+          if (insertPlan.broken) {
+            response = new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+            break;
+          }
           Table.TableMetadata table = currentDatabaseMetadata.getTableByName(insertPlan.tableName);
-          if (table == null)
-            return new ExecuteStatementResp(
-                StatusUtil.fail("Table " + insertPlan.tableName + " not found."), false);
+          if (table == null) {
+            response =
+                new ExecuteStatementResp(
+                    StatusUtil.fail("Table " + insertPlan.tableName + " not found."), false);
+            break;
+          }
           System.out.println(transactionId + " START INSERT!");
           ArrayList<ArrayList<String>> results = insertPlan.getValues(table);
-          for (ArrayList<String> result : results) {
-            table.insertRecord(transactionId, result);
+          boolean insertResult = true;
+          int index;
+          for (index = 0; index < results.size(); index++) {
+            insertResult = table.insertRecord(transactionId, results.get(index));
+            if (!insertResult) break;
           }
           System.out.println(transactionId + " RESPONSE CREATED!");
-          response = new ExecuteStatementResp(StatusUtil.success("Insertion succeeded."), false);
+          if (insertResult) {
+            response = new ExecuteStatementResp(StatusUtil.success("Insertion succeeded."), false);
+          } else {
+            response =
+                new ExecuteStatementResp(StatusUtil.fail("The primary key already exists."), false);
+          }
           break;
         case SELECT:
           SelectPlan selectPlan = (SelectPlan) plan;
-          if (selectPlan.broken)
-            return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+          if (selectPlan.broken) {
+            response = new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+            break;
+          }
           ArrayList<Table.TableMetadata> tables = new ArrayList<>();
           for (String tableName : selectPlan.tableNames) {
             //            System.out.println(tableName);
@@ -186,13 +228,18 @@ public class SessionRuntime {
           break;
         case DELETE:
           DeletePlan deletePlan = (DeletePlan) plan;
-          if (deletePlan.broken)
-            return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+          if (deletePlan.broken) {
+            response = new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+            break;
+          }
           Table.TableMetadata metadata =
               currentDatabaseMetadata.getTableByName(deletePlan.tableName);
-          if (metadata == null)
-            return new ExecuteStatementResp(
-                StatusUtil.fail("Table " + deletePlan.tableName + " not found."), false);
+          if (metadata == null) {
+            response =
+                new ExecuteStatementResp(
+                    StatusUtil.fail("Table " + deletePlan.tableName + " not found."), false);
+            break;
+          }
           //          System.out.println("DELETE starting");
           deletePlan.doDelete(transactionId, metadata);
           //          System.out.println("DELETE finished");
@@ -201,13 +248,18 @@ public class SessionRuntime {
           break;
         case UPDATE:
           UpdatePlan updatePlan = (UpdatePlan) plan;
-          if (updatePlan.broken)
-            return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+          if (updatePlan.broken) {
+            response = new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+            break;
+          }
           Table.TableMetadata updateMetadata =
               currentDatabaseMetadata.getTableByName(updatePlan.tableName);
-          if (updateMetadata == null)
-            return new ExecuteStatementResp(
-                StatusUtil.fail("Table " + updatePlan.tableName + " not found."), false);
+          if (updateMetadata == null) {
+            response =
+                new ExecuteStatementResp(
+                    StatusUtil.fail("Table " + updatePlan.tableName + " not found."), false);
+            break;
+          }
           //          System.out.println("UPDATE starting");
           boolean updateResult = updatePlan.doUpdate(transactionId, updateMetadata);
           //          System.out.println("UPDATE finished");
@@ -224,6 +276,11 @@ public class SessionRuntime {
 
       if (response != null) {
         if (ServerRuntime.config.auto_commit) {
+          if (response.status.getCode() == Global.FAILURE_CODE) {
+            response.status.msg =
+                " [WARNING!] The operation not succeed. But we 'commit' it for now.\n"
+                    + response.status.msg;
+          }
           System.out.println(
               " $$$$$$$$$$$$$$$ " + sessionId + " transaction: " + transactionId + " commit.");
           IO.pushTransactionCommit(transactionId);
@@ -231,7 +288,6 @@ public class SessionRuntime {
           // TODO: Suitable validation should be introduced.
           // If only NOT NULL as well as PRIMARY KEY constraints are implemented, we can sacrifice
           // functionality for performance.
-
           // release all locks
           ServerRuntime.releaseAllLocks(transactionId);
           transactionId = -1;
@@ -243,7 +299,32 @@ public class SessionRuntime {
       return new ExecuteStatementResp(
           StatusUtil.fail("Command not understood or implemented."), false);
     } catch (Exception e) {
-      return new ExecuteStatementResp(StatusUtil.fail(e.getMessage()), false);
+
+      ExecuteStatementResp response =
+          new ExecuteStatementResp(StatusUtil.fail(e.getMessage()), false);
+      if (ServerRuntime.config.auto_commit) {
+        response.status.msg =
+            " [WARNING!] The operation not succeed. But we 'commit' it for now.\n"
+                + response.status.msg;
+        System.out.println(
+            " $$$$$$$$$$$$$$$ "
+                + sessionId
+                + " transaction: "
+                + transactionId
+                + " commit. [FAIL BUT COMMIT!]");
+        try {
+          IO.pushTransactionCommit(transactionId);
+        } catch (Exception shallNeverHappen) {
+          /* We shall shut down the database, restart and recover it. */
+          System.out.println(shallNeverHappen.getMessage());
+          exit(0);
+        }
+        // release all locks
+        ServerRuntime.releaseAllLocks(transactionId);
+        transactionId = -1;
+        response.status.msg = response.status.msg + "\n\nEnd of the transaction.(auto commit on).";
+      }
+      return response;
     }
   }
 }

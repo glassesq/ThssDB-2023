@@ -51,13 +51,13 @@ public class Database {
      */
     public void createTable(long transactionId, Table.TableMetadata tableMetadata)
         throws Exception {
-      //      metaDataLatch.writeLock().lock();
+      metaDataLatch.writeLock().lock();
       tables.put(tableMetadata.spaceId, tableMetadata);
       object.getJSONArray("tables").put(tableMetadata.object);
       IO.writeCreateTable(transactionId, this.databaseId, tableMetadata);
       tableMetadata.initTablespaceFile(transactionId);
       ServerRuntime.tableMetadata.put(tableMetadata.spaceId, tableMetadata);
-      //      metaDataLatch.writeLock().unlock();
+      metaDataLatch.writeLock().unlock();
     }
 
     /**
@@ -71,7 +71,7 @@ public class Database {
      */
     public static DatabaseMetadata createDatabase(long transactionId, String name)
         throws Exception {
-      //      metaDataLatch.writeLock().lock();
+      metaDataLatch.writeLock().lock();
       if (ServerRuntime.databaseNameLookup.containsKey(name)) return null;
       DatabaseMetadata metadata = new DatabaseMetadata();
       metadata.name = name;
@@ -85,8 +85,35 @@ public class Database {
       ServerRuntime.metadataArray.put(metadata.object);
       ServerRuntime.databaseNameLookup.put(name, metadata.databaseId);
       IO.writeCreateDatabase(transactionId, name, metadata.databaseId);
-      //      metaDataLatch.writeLock().unlock();
+      metaDataLatch.writeLock().unlock();
       return metadata;
+    }
+
+    public static boolean dropDatabase(long transactionId, String name) throws Exception {
+      Integer databaseId = ServerRuntime.databaseNameLookup.get(name);
+      if (databaseId == null) {
+        /* database not exists. */
+        return false;
+      }
+      DatabaseMetadata metadata = ServerRuntime.databaseMetadata.get(databaseId);
+      int index = -1;
+      for (int i = 0; i < ServerRuntime.metadataArray.length(); i++) {
+        if (ServerRuntime.metadataArray.getJSONObject(i).getString("databaseName").equals(name)) {
+          index = i;
+          break;
+        }
+      }
+      if (index == -1) {
+        /* This shall never happen. */
+        return false;
+      }
+      metaDataLatch.writeLock().lock();
+      ServerRuntime.databaseMetadata.remove(metadata.databaseId);
+      ServerRuntime.databaseNameLookup.remove(name);
+      ServerRuntime.metadataArray.remove(index);
+      IO.writeDropDatabase(transactionId, name, metadata.databaseId);
+      metaDataLatch.writeLock().unlock();
+      return true;
     }
 
     public Table.TableMetadata getTableByName(String name) {

@@ -68,8 +68,7 @@ public class Column {
     column.object = object;
     column.type = str2DataType(object.getString("type"));
     if (column.type == DataType.STRING) column.length = object.getInt("length");
-    if (object.has("primaryKey") && object.getInt("primaryKey") >= 0)
-      column.primary = object.getInt("primaryKey");
+    column.primary = object.getInt("primaryKey");
     if (object.has("notNull") && object.getBoolean("notNull")) column.notNull = true;
     return column;
   }

@@ -838,7 +838,7 @@ public class IndexPage extends Page {
     System.out.println(transactionId + "enter move right and insert data.");
     Pair<Boolean, RecordInPage> insertResult;
     do {
-      System.out.println(transactionId + " try to enter data page");
+      System.out.println(transactionId + " try to enter data page " + currentPage.pageId);
       currentPage.bLinkTreeLatch.lock();
       System.out.println(transactionId + " b link got");
       insertResult =
@@ -854,40 +854,63 @@ public class IndexPage extends Page {
         }
         if (currentPage.notSafeToInsert(maxLength)) {
           System.out.println("not safe to insert!");
-          if (!currentPage.splitMyself(transactionId, ancestors, true)) return false;
-          currentPage.bLinkTreeLatch.unlock();
-          System.out.println(transactionId + " b link release");
+          ArrayList<ReentrantLock> locks = new ArrayList<>();
+          if (!currentPage.splitMyself(transactionId, ancestors, true, locks)) return false;
+          System.out.println("split ok for transaction " + transactionId);
+          //          currentPage.bLinkTreeLatch.unlock();
+          //          System.out.println(transactionId + " b link release");
           if (currentPage.isRoot()) {
             try {
               System.out.println("let us split and insert.");
-              return currentPage.insertDataRecordIntoTree(transactionId, dataRecordToBeInserted);
-            } catch (Exception e) {
-              System.out.println("not safe to insert!");
-              System.out.println(e);
+              currentPage =
+                  (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexLeftmostLeafIndex);
+              ancestors.push(currentPage);
+              boolean result =
+                  currentPage.moveRightAndInsertData(
+                      transactionId, dataRecordToBeInserted, ancestors, maxLength);
+              /* throw away b link latch. */
+              for (ReentrantLock lock : locks) {
+                while (lock.isHeldByCurrentThread()) lock.unlock();
+              }
+              return result;
+            } catch (Exception shallNeverHappen) {
               return false;
             }
           } else {
-            return currentPage.moveRightAndInsertData(
-                transactionId, dataRecordToBeInserted, ancestors, maxLength);
+            System.out.println("we split a node (not root), now we move right and insert data.");
+            boolean result =
+                currentPage.moveRightAndInsertData(
+                    transactionId, dataRecordToBeInserted, ancestors, maxLength);
+            for (ReentrantLock lock : locks) {
+              while (lock.isHeldByCurrentThread()) lock.unlock();
+            }
+            return result;
           }
         }
         System.out.println(transactionId + " insert here!");
         currentPage.insertDataRecordInternal(
             transactionId, dataRecordToBeInserted, insertResult.right);
         System.out.println(transactionId + " b link tree " + currentPage.pageId + "unlock here!");
-        currentPage.bLinkTreeLatch.unlock();
+        while (currentPage.bLinkTreeLatch.isHeldByCurrentThread())
+          currentPage.bLinkTreeLatch.unlock();
         break;
       } else {
         /* move right */
         IndexPage previousPage = currentPage;
+        System.out.println("move right and unlock previous page latch.");
         // TODO: test for concurrency
         try {
           currentPage = (IndexPage) IO.read(this.spaceId, insertResult.right.nextAbsoluteOffset);
-        } catch (Exception e) {
+        } catch (Exception neverShallHappen) {
           previousPage.bLinkTreeLatch.unlock();
           return false;
         }
-        previousPage.bLinkTreeLatch.unlock();
+        System.out.println(
+            transactionId
+                + ": transaction release prevous page latch for page "
+                + previousPage.pageId);
+        while (previousPage.bLinkTreeLatch.isHeldByCurrentThread())
+          previousPage.bLinkTreeLatch.unlock();
       }
     } while (true);
     return true;
@@ -939,7 +962,8 @@ public class IndexPage extends Page {
    * @param transactionId transaction
    * @return true if succeed
    */
-  public boolean splitRoot(long transactionId, boolean requireLock) {
+  public boolean splitRoot(
+      long transactionId, boolean requireLock, ArrayList<ReentrantLock> bLinkLatchToThrow) {
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
 
     ArrayList<RecordInPage> recordInPage = new ArrayList<>();
@@ -983,7 +1007,11 @@ public class IndexPage extends Page {
     }
 
     if (requireLock) {
+      leftPage.bLinkTreeLatch.lock();
+      bLinkLatchToThrow.add(leftPage.bLinkTreeLatch);
       ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch);
+      rightPage.bLinkTreeLatch.lock();
+      bLinkLatchToThrow.add(rightPage.bLinkTreeLatch);
       ServerRuntime.getWriteLock(transactionId, rightPage.pageReadAndWriteLatch);
     }
 
@@ -1019,6 +1047,8 @@ public class IndexPage extends Page {
     infimumRecord.nextRecordInPage = leftPointerRecord;
     /* ******************************** END ATOMIC ********************* */
 
+    while (this.bLinkTreeLatch.isHeldByCurrentThread()) this.bLinkTreeLatch.unlock();
+
     leftPage.writeAll(transactionId);
     rightPage.writeAll(transactionId);
     this.writeAll(transactionId);
@@ -1038,12 +1068,16 @@ public class IndexPage extends Page {
    * @param ancestors a stack containing the rightmost page of each layer above
    * @return true if succeed
    */
-  private boolean splitMyself(long transactionId, Stack<IndexPage> ancestors, boolean requireLock) {
+  private boolean splitMyself(
+      long transactionId,
+      Stack<IndexPage> ancestors,
+      boolean requireLock,
+      ArrayList<ReentrantLock> bLinkLatchToThrow) {
     if (requireLock) {
       ServerRuntime.getWriteLock(transactionId, this.pageReadAndWriteLatch);
     }
     if (isRoot()) {
-      return splitRoot(transactionId, requireLock);
+      return splitRoot(transactionId, requireLock, bLinkLatchToThrow);
     }
 
     Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
@@ -1061,6 +1095,8 @@ public class IndexPage extends Page {
     }
     IndexPage rightPage = createIndexPage(transactionId, this.spaceId, rightPageId);
     if (requireLock) {
+      rightPage.bLinkTreeLatch.lock(); // TODO: throw this latch some time later.
+      bLinkLatchToThrow.add(rightPage.bLinkTreeLatch);
       ServerRuntime.getWriteLock(transactionId, rightPage.pageReadAndWriteLatch);
     }
     RecordInPage rightPageSupremeRecord = rightPage.infimumRecord.nextRecordInPage;
@@ -1113,14 +1149,21 @@ public class IndexPage extends Page {
 
     int maxLength = metadata.getMaxRecordLength(RecordInPage.USER_POINTER_RECORD);
     IndexPage maybeParent = ancestors.pop();
+    System.out.println("let us insert pointer!");
     if (!maybeParent.moveRightAndInsertPointer(
         transactionId, ancestors, maxLength, this.pageId, rightPageId, maxRecordInRight)) {
       System.out.println("The pointer record is missing for splitting process.");
     }
+    System.out.println("stop here!");
     // TODO: to fix !!!!!! modify value in left pointer
 
     this.writeAll(transactionId);
     rightPage.writeAll(transactionId);
+
+    if (!requireLock) {
+      while (bLinkTreeLatch.isHeldByCurrentThread()) bLinkTreeLatch.unlock();
+      //      rightPage.bLinkTreeLatch.unlock();
+    }
 
     return true;
   }
@@ -1265,11 +1308,12 @@ public class IndexPage extends Page {
       insertResult = maybeParent.scanInternalForPage(transactionId, leftOfChildPageId);
       if (insertResult.left) {
         if (maybeParent.notSafeToInsert(maxLength)) {
-          if (!maybeParent.splitMyself(transactionId, ancestors, false)) {
+          if (!maybeParent.splitMyself(transactionId, ancestors, false, null)) {
+            /* never shall happen! */
             exit(0);
             return false;
           }
-          maybeParent.bLinkTreeLatch.unlock();
+          // automatically relase maybeParent.bLinkTreeLatch.unlock() in split myself.
           ancestors.push(maybeParent);
           if (!maybeParent.isRoot()) {
             return maybeParent.moveRightAndInsertPointer(
@@ -1281,6 +1325,7 @@ public class IndexPage extends Page {
                 maxRecordInRight);
           } else {
             // TODO: ?????
+            System.out.println("we split root into something really fancy.");
             int leftPageId = maybeParent.infimumRecord.nextRecordInPage.childPageId;
             IndexPage rootPage = maybeParent;
             try {
@@ -1301,18 +1346,20 @@ public class IndexPage extends Page {
         }
         maybeParent.insertPointerRecordInternal(
             transactionId, maxRecordInRight, childPageToPoint, insertResult.right);
-        maybeParent.bLinkTreeLatch.unlock();
+        while (maybeParent.bLinkTreeLatch.isHeldByCurrentThread())
+          maybeParent.bLinkTreeLatch.unlock();
         ancestors.push(maybeParent);
         break;
       } else {
         IndexPage previousPage = maybeParent;
         try {
           maybeParent = (IndexPage) IO.read(this.spaceId, insertResult.right.nextAbsoluteOffset);
-        } catch (Exception e) {
+        } catch (Exception neverShallHappen) {
           previousPage.bLinkTreeLatch.unlock();
           return false;
         }
-        previousPage.bLinkTreeLatch.unlock();
+        while (previousPage.bLinkTreeLatch.isHeldByCurrentThread())
+          previousPage.bLinkTreeLatch.unlock();
       }
     } while (true);
     return true;
