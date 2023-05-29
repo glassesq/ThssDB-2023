@@ -31,10 +31,11 @@ public class PerformanceTestExecutor extends TestExecutor {
       new EnumMap<>(OperationType.class);
   private List<Client> clients;
   private Map<Integer, PerformanceTestExecutor.Measurement> measurements = new HashMap<>();
-  private int CLIENT_NUMBER = 5;
-  private int TABLE_NUMBER = 3;
-  private int OPERATION_NUMBER = 100;
-  private String OPERATION_RATIO = "80:5:5:5:5";
+  // TODO: use for insert test!
+  private int CLIENT_NUMBER = 10;
+  private int TABLE_NUMBER = 1;
+  private int OPERATION_NUMBER = 500;
+  private String OPERATION_RATIO = "100:0:0:0:0";
 
   BaseDataGenerator dataGenerator;
   WeightedRandomPicker weightedRandomPicker;

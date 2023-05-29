@@ -131,6 +131,26 @@
                             <goal>test</goal>
                         </goals>
                     </execution>
+
+                    <execution>
+                        <id>standard-test</id>
+                        <phase>test</phase>
+                        <configuration>
+                            <includes>
+                                <include>**/benchmark/CRUDTest.java</include>
+                                <include>**/benchmark/ConcurrentTest.java</include>
+                            </includes>
+                            <excludes>
+                                <exclude>**/benchmark/PerformanceTest.java</exclude>
+                                <exclude>**/benchmark/TransactionTest.java</exclude>
+                                <exclude>**/*TestLimited.java</exclude>
+                                <exclude>**/*Test.java</exclude>
+                            </excludes>
+                        </configuration>
+                        <goals>
+                            <goal>test</goal>
+                        </goals>
+                    </execution>
                 </executions>
                 <dependencies>
                     <dependency>

@@ -2,7 +2,7 @@ package cn.edu.thssdb.runtime;
 
 public class Configuration {
 
-  public String testPath = "C:\\Users\\Maxwell-Cat\\Desktop\\test";
+  public String testPath = "/Users/rongyi/Desktop/metadata";
 
   public String MetadataFilename = testPath + "/" + "example.json";
   public String WALFilename = testPath + "/" + "WAL.log";
@@ -37,7 +37,7 @@ public class Configuration {
   public Configuration() {
     allow_implicit_transaction = true;
     auto_commit = true;
-    serializable = true;
+    serializable = false;
 
     /* conflict test */
     // TODO: assert (!(allow_implicit_transaction && auto_commit));

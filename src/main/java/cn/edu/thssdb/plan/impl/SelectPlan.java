@@ -35,12 +35,12 @@ public class SelectPlan extends LogicalPlan {
   public long transactionId = -1;
 
   public void initialization(ArrayList<Table.TableMetadata> tables) {
-    System.out.println("initialization start");
+    //    System.out.println("initialization start");
     // initialize res, colInTable
     res = new QueryResult();
     colInTable = new ArrayList<>();
-    System.out.println("useWhere = " + useWhere);
-    System.out.println(columns.size());
+    //    System.out.println("useWhere = " + useWhere);
+    //    System.out.println(columns.size());
     for (SQLParser.ColumnFullNameContext column : columns) {
       res.columns.add(column.getText());
       //      System.out.print(column.getText() + ',');
@@ -51,12 +51,12 @@ public class SelectPlan extends LogicalPlan {
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + table.name + "'");
           colInTable.add(table.getColumnDetailByName(keyName));
-          //          System.out.println(table.getColumnDetailByName(keyName).toString());
+          //                    System.out.println(table.getColumnDetailByName(keyName).toString());
           break;
         }
       }
     }
-    System.out.println("\nphase 1 over");
+    //    System.out.println("\nphase 1 over");
     // initialize L_index, R_index, L_queryCol, R_queryCol
     Table.TableMetadata table = !useJoin ? tables.get(0) : null;
     int i = 0;
@@ -82,7 +82,7 @@ public class SelectPlan extends LogicalPlan {
       }
       ++i;
     }
-    System.out.println("phase 2 over");
+    //    System.out.println("phase 2 over");
     if (!useWhere) return;
     // initialize queryCol, queryValue
     String keyName = L_where.columnName().getText();
@@ -100,7 +100,7 @@ public class SelectPlan extends LogicalPlan {
 
   public ArrayList<String> applyProjection(RecordLogical record) {
     ArrayList<String> result = new ArrayList<>();
-    //    System.out.println("---Proj---");
+    //        System.out.println("---Proj---");
     //    System.out.println(columns.size());
     for (int i = 0; i < columns.size(); ++i)
       result.add(getRecordValue(record, colInTable.get(i).primary).toString());

@@ -16,6 +16,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static java.lang.System.exit;
+
 /**
  * The runtime of the database server. Every member variable and function shall be static in this
  * class.
@@ -68,10 +70,16 @@ public class ServerRuntime {
    * @param lock lock
    */
   public static void getWriteLock(long transactionId, ReentrantReadWriteLock lock) {
-    System.out.println(transactionId + " get write lock");
-    while (lock.getReadLockCount() > 0) {
-      lock.readLock().unlock();
-      locks.get(transactionId).remove(lock.readLock());
+    if (lock == null) return;
+    try {
+      // TODO: to fix
+      while (lock.getReadHoldCount() > 0) {
+        lock.readLock().unlock();
+        locks.get(transactionId).remove(lock.readLock());
+      }
+    } catch (Exception e) {
+      System.out.println(e);
+      exit(0);
     }
     getTwoPhaseLock(transactionId, lock.writeLock());
   }
@@ -83,7 +91,8 @@ public class ServerRuntime {
    * @param lock lock
    */
   public static void getReadLock(long transactionId, ReentrantReadWriteLock lock) {
-    System.out.println(transactionId + " get read lock");
+    if (lock == null) return;
+    //    System.out.println(transactionId + " get read lock");
     if (config.serializable) {
       getTwoPhaseLock(transactionId, lock.readLock());
     } else {
@@ -97,6 +106,7 @@ public class ServerRuntime {
    * @param lock lock
    */
   public static void releaseReadLock(ReentrantReadWriteLock lock) {
+    if (lock == null) return;
     if (!config.serializable && lock.getReadLockCount() > 0) {
       lock.readLock().unlock();
     }
@@ -109,10 +119,10 @@ public class ServerRuntime {
    */
   public static void releaseAllLocks(long transactionId) {
     System.out.println(transactionId + " release all locks " + locks.get(transactionId).size());
-    //    for (Lock lock : locks.get(transactionId)) {
-    //      lock.unlock();
-    //    }
-    //    locks.remove(transactionId);
+    for (Lock lock : locks.get(transactionId)) {
+      lock.unlock();
+    }
+    locks.remove(transactionId);
   }
 
   /**
@@ -169,6 +179,7 @@ public class ServerRuntime {
     long sessionId = sessionCounter.incrementAndGet();
     SessionRuntime sessionRuntime = new SessionRuntime();
     sessions.put(sessionId, sessionRuntime);
+    sessionRuntime.sessionId = sessionId;
     return sessionId;
   }
 
@@ -224,7 +235,10 @@ public class ServerRuntime {
                   + ". Uncommitted actions shall be automatically aborted. Please connect to the server again."),
           false);
     }
-    return sessionRuntime.runPlan(plan);
+    ExecuteStatementResp response = sessionRuntime.runPlan(plan);
+    System.out.println(
+        sessionRuntime.sessionId + " END ITS RUN PLAN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    return response;
   }
 
   /**

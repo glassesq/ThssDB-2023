@@ -14,6 +14,8 @@ import java.util.ArrayList;
 /** The runtime of one session. */
 public class SessionRuntime {
 
+  public long sessionId = -1;
+
   /** current database under the session's use. */
   public int databaseId = -1;
 
@@ -33,6 +35,8 @@ public class SessionRuntime {
    */
   public ExecuteStatementResp runPlan(LogicalPlan plan) {
     try {
+      System.out.println("SOMEBODY CALL RUN PLAN!!!!!!!!!!!!!");
+      System.out.println("SESSION IS " + sessionId);
 
       /* Transaction Free Statement. */
       switch (plan.getType()) {
@@ -64,7 +68,9 @@ public class SessionRuntime {
             false);
       }
       ExecuteStatementResp response = null;
-      System.out.println(plan); // For Test
+      System.out.println("HELLO????????????");
+      System.out.println(
+          "session: " + sessionId + " transaction: " + transactionId + " " + plan); // For Test
       switch (plan.getType()) {
         case COMMIT:
           IO.pushTransactionCommit(transactionId);
@@ -145,10 +151,12 @@ public class SessionRuntime {
           if (table == null)
             return new ExecuteStatementResp(
                 StatusUtil.fail("Table " + insertPlan.tableName + " not found."), false);
+          System.out.println(transactionId + " START INSERT!");
           ArrayList<ArrayList<String>> results = insertPlan.getValues(table);
           for (ArrayList<String> result : results) {
             table.insertRecord(transactionId, result);
           }
+          System.out.println(transactionId + " RESPONSE CREATED!");
           response = new ExecuteStatementResp(StatusUtil.success("Insertion succeeded."), false);
           break;
         case SELECT:
@@ -157,13 +165,13 @@ public class SessionRuntime {
             return new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
           ArrayList<Table.TableMetadata> tables = new ArrayList<>();
           for (String tableName : selectPlan.tableNames) {
-            System.out.println(tableName);
-            System.out.println(currentDatabaseMetadata.getTableByName(tableName));
+            //            System.out.println(tableName);
+            //            System.out.println(currentDatabaseMetadata.getTableByName(tableName));
             tables.add(currentDatabaseMetadata.getTableByName(tableName));
           }
-          System.out.println("SELECT starting");
+          //          System.out.println("SELECT starting");
           QueryResult result = selectPlan.getResult(transactionId, tables);
-          System.out.println("SELECT finished");
+          //          System.out.println("SELECT finished");
           response =
               new ExecuteStatementResp(StatusUtil.success("Select operation completed"), true);
           response.setColumnsList(result.columns);
@@ -171,7 +179,7 @@ public class SessionRuntime {
             response.addToRowList(row);
             int i = 0;
             for (String e : row) {
-              System.out.println(result.columns.get(i) + e);
+              //              System.out.println(result.columns.get(i) + e);
               ++i;
             }
           }
@@ -185,9 +193,9 @@ public class SessionRuntime {
           if (metadata == null)
             return new ExecuteStatementResp(
                 StatusUtil.fail("Table " + deletePlan.tableName + " not found."), false);
-          System.out.println("DELETE starting");
+          //          System.out.println("DELETE starting");
           deletePlan.doDelete(transactionId, metadata);
-          System.out.println("DELETE finished");
+          //          System.out.println("DELETE finished");
           response =
               new ExecuteStatementResp(StatusUtil.success("delete operation completed"), false);
           break;
@@ -200,9 +208,9 @@ public class SessionRuntime {
           if (updateMetadata == null)
             return new ExecuteStatementResp(
                 StatusUtil.fail("Table " + updatePlan.tableName + " not found."), false);
-          System.out.println("UPDATE starting");
+          //          System.out.println("UPDATE starting");
           boolean updateResult = updatePlan.doUpdate(transactionId, updateMetadata);
-          System.out.println("UPDATE finished");
+          //          System.out.println("UPDATE finished");
           response =
               new ExecuteStatementResp(StatusUtil.success("update operation completed"), false);
           if (!updateResult)
@@ -216,6 +224,8 @@ public class SessionRuntime {
 
       if (response != null) {
         if (ServerRuntime.config.auto_commit) {
+          System.out.println(
+              " $$$$$$$$$$$$$$$ " + sessionId + " transaction: " + transactionId + " commit.");
           IO.pushTransactionCommit(transactionId);
           // This commit is only for test.
           // TODO: Suitable validation should be introduced.

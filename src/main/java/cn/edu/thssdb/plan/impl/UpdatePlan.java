@@ -39,9 +39,9 @@ public class UpdatePlan extends LogicalPlan {
   public Table.TableMetadata tableMetadata;
 
   public void initialization(Table.TableMetadata table) {
-    System.out.println("update initialization start");
+    //    System.out.println("update initialization start");
     this.tableMetadata = table;
-    System.out.println("useWhere = " + useWhere);
+    //    System.out.println("useWhere = " + useWhere);
     if (useWhere) {
       String keyName = L_where.columnName().getText();
       if (table == null)
@@ -173,6 +173,7 @@ public class UpdatePlan extends LogicalPlan {
   public boolean updateWherePrimaryEqual() throws Exception {
     IndexPage rootPage =
         (IndexPage) IO.read(tableMetadata.spaceId, ServerRuntime.config.indexRootPageIndex);
+    System.out.println("update where primary equal!");
     if (updateSingleAndOnlyPrimary) {
       ValueWrapper[] queryKey = {queryValue};
       if (queryValue.compareTo(valueToSet) == 0) {
@@ -195,10 +196,12 @@ public class UpdatePlan extends LogicalPlan {
         return true;
       }
     } else {
-      System.out.println("here we delete.");
+      System.out.println("here we delete, no conflict!" + transactionId);
       ValueWrapper[] queryKey = {queryValue};
+      System.out.println("try delete." + transactionId);
       RecordLogical recordDeleted =
           rootPage.scanTreeAndDeleteRecordWithKey(transactionId, queryKey);
+      System.out.println("delete ok." + transactionId);
       if (recordDeleted == null) {
         /* no such record */
         return true;
@@ -209,8 +212,11 @@ public class UpdatePlan extends LogicalPlan {
       } else {
         recordToInsert.nonPrimaryKeyValues[-columnToSet.primary - 1].setWithNull(valueLiteralToSet);
       }
+      System.out.println("try insert." + transactionId);
       boolean insertResult = rootPage.insertDataRecordIntoTree(transactionId, recordToInsert);
+      System.out.println("insert ok." + transactionId);
       if (!insertResult) {
+        System.out.println("let us recover" + transactionId);
         rootPage.insertDataRecordIntoTree(transactionId, recordDeleted);
       } else {
         return true;
@@ -233,10 +239,10 @@ public class UpdatePlan extends LogicalPlan {
     IndexPage rootPage =
         (IndexPage) IO.read(tableMetadata.spaceId, ServerRuntime.config.indexRootPageIndex);
 
-    System.out.println("update record list start");
+    //    System.out.println("update record list start");
     if (conflictingUpdate) {
       /* shadow insert */
-      System.out.println("shadow insert start.");
+      //      System.out.println("shadow insert start.");
       ArrayList<RecordLogical> shadows = new ArrayList<>();
       boolean noConflict = true;
       for (IndexPage.RecordInPage recordInPage : recordsToUpdate) {
@@ -247,10 +253,10 @@ public class UpdatePlan extends LogicalPlan {
           recordToInsert.nonPrimaryKeyValues[-columnToSet.primary - 1].setWithNull(
               valueLiteralToSet);
         }
-        System.out.println("try to insert: ");
+        //        System.out.println("try to insert: ");
         System.out.println(recordToInsert);
         noConflict = rootPage.insertDataRecordIntoTree(transactionId, recordToInsert);
-        System.out.println("noConflict: " + noConflict);
+        //        System.out.println("noConflict: " + noConflict);
         if (!noConflict) break;
         shadows.add(recordToInsert);
       }
@@ -268,7 +274,7 @@ public class UpdatePlan extends LogicalPlan {
       }
     } else {
       /* insert */
-      System.out.println("insert start.");
+      //      System.out.println("insert start.");
       for (IndexPage.RecordInPage recordInPage : recordsToUpdate) {
         RecordLogical recordToInsert = new RecordLogical(recordInPage);
         if (columnToSet.primary >= 0) {
@@ -277,8 +283,8 @@ public class UpdatePlan extends LogicalPlan {
           recordToInsert.nonPrimaryKeyValues[-columnToSet.primary - 1].setWithNull(
               valueLiteralToSet);
         }
-        System.out.println("new record to insert:");
-        System.out.println(recordInPage);
+        //        System.out.println("new record to insert:");
+        //        System.out.println(recordInPage);
         rootPage.insertDataRecordIntoTree(transactionId, recordToInsert);
       }
     }
@@ -286,7 +292,7 @@ public class UpdatePlan extends LogicalPlan {
   }
 
   public boolean updateCondition() throws Exception {
-    System.out.println("getCondition");
+    //    System.out.println("getCondition");
 
     IndexPage.recordCondition condition;
     if (useWhere) {
@@ -305,11 +311,11 @@ public class UpdatePlan extends LogicalPlan {
     int nextPageId =
         rootPage.deleteFromLeftmostDataPage(transactionId, condition, recordsNeedToUpdate);
 
-    System.out.println("delete these:");
+    //    System.out.println("delete these:");
 
-    for (IndexPage.RecordInPage record : recordsNeedToUpdate) {
-      System.out.println(record);
-    }
+    //    for (IndexPage.RecordInPage record : recordsNeedToUpdate) {
+    //      System.out.println(record);
+    //    }
 
     if (updateSingleAndOnlyPrimary && recordsNeedToUpdate.size() > 1) {
       for (IndexPage.RecordInPage record : recordsNeedToUpdate) {

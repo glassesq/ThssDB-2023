@@ -250,7 +250,7 @@ public class CRUDTestExecutor extends TestExecutor {
     Set<List<Object>> tableData = dataMap.get("test_table2");
     for (List<Object> rowData : tableData) {
       if ((float) rowData.get(2) == 50) {
-        rowData.set(2, 100);
+        rowData.set(2, Float.parseFloat("100"));
       }
     }
 
@@ -275,7 +275,7 @@ public class CRUDTestExecutor extends TestExecutor {
     tableData = dataMap.get("test_table3");
     for (List<Object> rowData : tableData) {
       if ((float) rowData.get(2) == 50) {
-        rowData.set(3, 100);
+        rowData.set(3, Double.parseDouble("100"));
       }
     }
 
