@@ -100,11 +100,11 @@ public class SelectPlan extends LogicalPlan {
 
   public ArrayList<String> applyProjection(RecordLogical record) {
     ArrayList<String> result = new ArrayList<>();
-    //        System.out.println("---Proj---");
-    //    System.out.println(columns.size());
+    //            System.out.println("---Proj---");
+    //        System.out.println(columns.size());
     for (int i = 0; i < columns.size(); ++i)
       result.add(getRecordValue(record, colInTable.get(i).primary).toString());
-    //    System.out.println("+++Proj+++");
+    //        System.out.println("+++Proj+++");
     return result;
   }
 
@@ -161,7 +161,7 @@ public class SelectPlan extends LogicalPlan {
     ValueWrapper[] query = {queryValue};
     Pair<Boolean, IndexPage.RecordInPage> key =
         rootPage.scanTreeAndReturnRecord(transactionId, query);
-    if (key.left) applyProjection(new RecordLogical(key.right, table));
+    if (key.left) res.rows.add(applyProjection(new RecordLogical(key.right, table)));
     return res;
   }
 

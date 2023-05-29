@@ -72,14 +72,14 @@ public class ServerRuntime {
   public static void getWriteLock(long transactionId, ReentrantReadWriteLock lock) {
     if (lock == null) return;
     try {
-      // TODO: to fix
       while (lock.getReadHoldCount() > 0) {
+        /* We are doing an upgrade now! */
         lock.readLock().unlock();
         locks.get(transactionId).remove(lock.readLock());
       }
     } catch (Exception e) {
       System.out.println(e);
-      exit(0);
+      exit(1);
     }
     getTwoPhaseLock(transactionId, lock.writeLock());
   }
@@ -118,20 +118,12 @@ public class ServerRuntime {
    * @param transactionId transaction id
    */
   public static void releaseAllLocks(long transactionId) {
-    System.out.println(transactionId + " release all locks " + locks.get(transactionId).size());
+    //    System.out.println(transactionId + " release all locks " +
+    // locks.get(transactionId).size());
     for (Lock lock : locks.get(transactionId)) {
       lock.unlock();
     }
     locks.remove(transactionId);
-    // TODO: to fix, try catch is just to make it work FOR NOW!!!
-    try {
-      Database.DatabaseMetadata.metaDataLatch.readLock().unlock();
-    } catch (Exception ignored) {
-    }
-    try {
-      Database.DatabaseMetadata.metaDataLatch.writeLock().unlock();
-    } catch (Exception ignored) {
-    }
   }
 
   /**
@@ -245,8 +237,8 @@ public class ServerRuntime {
           false);
     }
     ExecuteStatementResp response = sessionRuntime.runPlan(plan);
-    System.out.println(
-        sessionRuntime.sessionId + " END ITS RUN PLAN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+    //    System.out.println( sessionRuntime.sessionId + " END ITS RUN
+    // PLAN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     return response;
   }
 
@@ -288,7 +280,7 @@ public class ServerRuntime {
         }
       }
       /* FOR TEST */
-      System.out.println("Metadata Load Successful from " + config.MetadataFilename);
+      /*System.out.println("Metadata Load Successful from " + config.MetadataFilename);
       for (Integer k : databaseMetadata.keySet()) {
         System.out.println(
             "database "
@@ -298,7 +290,7 @@ public class ServerRuntime {
                 + " with "
                 + databaseMetadata.get(k).tables.size()
                 + " tables");
-      }
+      } */
     }
   }
 }

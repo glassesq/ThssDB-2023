@@ -23,6 +23,7 @@ public abstract class LogicalPlan {
     SELECT,
     DELETE,
     UPDATE,
-    DROP_DATABASE
+    DROP_DATABASE,
+    BEGIN_TRANSACTION
   }
 }

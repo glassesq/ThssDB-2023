@@ -119,6 +119,7 @@ public class WriteLog {
     public void writeToDisk() throws Exception {
       FileOutputStream stream = new FileOutputStream(ServerRuntime.config.WALFilename, true);
       stream.write((this + "\n").getBytes());
+      stream.close();
     }
   }
 

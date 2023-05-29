@@ -12,6 +12,8 @@ sqlStmtList :
 
 sqlStmt :
     createTableStmt
+    | commitStmt
+    | beginTransactionStmt
     | createDbStmt
     | createUserStmt
     | dropDbStmt
@@ -29,6 +31,12 @@ sqlStmt :
     | showTableStmt
     | quitStmt
     | updateStmt ;
+
+commitStmt:
+    K_COMMIT ;
+
+beginTransactionStmt:
+    K_BEGIN K_TRANSACTION ;
 
 createDbStmt :
     K_CREATE K_DATABASE databaseName ;
@@ -225,6 +233,9 @@ K_USER : U S E R;
 K_VALUES : V A L U E S;
 K_VIEW : V I E W;
 K_WHERE : W H E R E;
+K_COMMIT : C O M M I T;
+K_TRANSACTION : T R A N S A C T I O N;
+K_BEGIN : B E G I N;
 
 IDENTIFIER :
     [a-zA-Z_] [a-zA-Z_0-9]* ;

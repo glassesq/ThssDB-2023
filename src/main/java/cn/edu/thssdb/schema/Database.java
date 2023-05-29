@@ -8,6 +8,8 @@ import org.json.JSONObject;
 import java.util.HashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
+import static java.lang.System.exit;
+
 public class Database {
   public static class DatabaseMetadata {
     public String name;
@@ -16,7 +18,7 @@ public class Database {
     public HashMap<Integer, Table.TableMetadata> tables = new HashMap<>();
 
     /** lock for databaseMetadata */
-    public static ReentrantReadWriteLock metaDataLatch = new ReentrantReadWriteLock();
+    public static final ReentrantReadWriteLock metaDataLatch = new ReentrantReadWriteLock();
 
     JSONObject object;
 
@@ -52,11 +54,15 @@ public class Database {
     public void createTable(long transactionId, Table.TableMetadata tableMetadata)
         throws Exception {
       metaDataLatch.writeLock().lock();
-      tables.put(tableMetadata.spaceId, tableMetadata);
-      object.getJSONArray("tables").put(tableMetadata.object);
-      IO.writeCreateTable(transactionId, this.databaseId, tableMetadata);
-      tableMetadata.initTablespaceFile(transactionId);
-      ServerRuntime.tableMetadata.put(tableMetadata.spaceId, tableMetadata);
+      try {
+        tables.put(tableMetadata.spaceId, tableMetadata);
+        object.getJSONArray("tables").put(tableMetadata.object);
+        IO.writeCreateTable(transactionId, this.databaseId, tableMetadata);
+        tableMetadata.initTablespaceFile(transactionId);
+        ServerRuntime.tableMetadata.put(tableMetadata.spaceId, tableMetadata);
+      } catch (Exception shallNeverHappen) {
+        exit(4);
+      }
       metaDataLatch.writeLock().unlock();
     }
 
@@ -72,19 +78,23 @@ public class Database {
     public static DatabaseMetadata createDatabase(long transactionId, String name)
         throws Exception {
       metaDataLatch.writeLock().lock();
-      if (ServerRuntime.databaseNameLookup.containsKey(name)) return null;
       DatabaseMetadata metadata = new DatabaseMetadata();
-      metadata.name = name;
-      metadata.databaseId = ServerRuntime.newDatabase();
-      metadata.tables = new HashMap<>();
-      ServerRuntime.databaseMetadata.put(metadata.databaseId, metadata);
-      metadata.object = new JSONObject();
-      metadata.object.put("databaseName", name);
-      metadata.object.put("databaseId", metadata.databaseId);
-      metadata.object.put("tables", new JSONArray());
-      ServerRuntime.metadataArray.put(metadata.object);
-      ServerRuntime.databaseNameLookup.put(name, metadata.databaseId);
-      IO.writeCreateDatabase(transactionId, name, metadata.databaseId);
+      try {
+        if (ServerRuntime.databaseNameLookup.containsKey(name)) return null;
+        metadata.name = name;
+        metadata.databaseId = ServerRuntime.newDatabase();
+        metadata.tables = new HashMap<>();
+        ServerRuntime.databaseMetadata.put(metadata.databaseId, metadata);
+        metadata.object = new JSONObject();
+        metadata.object.put("databaseName", name);
+        metadata.object.put("databaseId", metadata.databaseId);
+        metadata.object.put("tables", new JSONArray());
+        ServerRuntime.metadataArray.put(metadata.object);
+        ServerRuntime.databaseNameLookup.put(name, metadata.databaseId);
+        IO.writeCreateDatabase(transactionId, name, metadata.databaseId);
+      } catch (Exception shallNeverHappen) {
+        exit(5);
+      }
       metaDataLatch.writeLock().unlock();
       return metadata;
     }
@@ -108,10 +118,14 @@ public class Database {
         return false;
       }
       metaDataLatch.writeLock().lock();
-      ServerRuntime.databaseMetadata.remove(metadata.databaseId);
-      ServerRuntime.databaseNameLookup.remove(name);
-      ServerRuntime.metadataArray.remove(index);
-      IO.writeDropDatabase(transactionId, name, metadata.databaseId);
+      try {
+        ServerRuntime.databaseMetadata.remove(metadata.databaseId);
+        ServerRuntime.databaseNameLookup.remove(name);
+        ServerRuntime.metadataArray.remove(index);
+        IO.writeDropDatabase(transactionId, name, metadata.databaseId);
+      } catch (Exception shallNeverHappen) {
+        exit(6);
+      }
       metaDataLatch.writeLock().unlock();
       return true;
     }
@@ -121,36 +135,13 @@ public class Database {
       // optimization
       for (Integer i : tables.keySet()) {
         if (name.equals(tables.get(i).name)) {
+          metaDataLatch.readLock().unlock();
           return tables.get(i);
         }
       }
+
       metaDataLatch.readLock().unlock();
       return null;
-    }
-
-    private void persist() {
-      // TODO
-    }
-
-    private void deleteDatabase() {
-      // TODO
-    }
-
-    public void drop() {
-      // TODO
-    }
-
-    public String select() {
-      // TODO
-      return null;
-    }
-
-    private void recover() {
-      // TODO
-    }
-
-    public void quit() {
-      // TODO
     }
   }
 }

@@ -35,7 +35,7 @@ public class PerformanceTestExecutor extends TestExecutor {
   private int CLIENT_NUMBER = 10;
   private int TABLE_NUMBER = 1;
   private int OPERATION_NUMBER = 500;
-  private String OPERATION_RATIO = "80:0:0:10:10";
+  private String OPERATION_RATIO = "80:0:0:20:0";
   /* insert update delete query join */
 
   BaseDataGenerator dataGenerator;

@@ -38,6 +38,14 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
     return new CreateDatabasePlan(ctx.databaseName().getText());
   }
 
+  public LogicalPlan visitCommitStmt(SQLParser.CommitStmtContext ctx) {
+    return new CommitPlan();
+  }
+
+  public LogicalPlan visitBeginTransactionStmt(SQLParser.BeginTransactionStmtContext ctx) {
+    return new BeginTransactionPlan();
+  }
+
   @Override
   public LogicalPlan visitUseDbStmt(SQLParser.UseDbStmtContext ctx) {
     return new UseDatabasePlan(ctx.databaseName().getText());

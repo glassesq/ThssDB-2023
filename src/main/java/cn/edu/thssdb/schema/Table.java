@@ -247,7 +247,7 @@ public class Table {
 
       for (int i = 0; i < metadata.columnObjectArray.length(); i++) {
         Column column = Column.parse(metadata.columnObjectArray.getJSONObject(i));
-        if (column == null) exit(0);
+        if (column == null) exit(2);
         String name = metadata.columnObjectArray.getJSONObject(i).getString("columnName");
 
         metadata.columnNames.put(name, column.primary);

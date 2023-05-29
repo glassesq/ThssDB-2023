@@ -30,8 +30,8 @@ For default configurations using JSON, relevant JSONObject and JSONArray shall b
 #### 基础要求
 
 - [ ] 实现表的创建、删除；
-- [ ] 实现数据库的创建、删除、切换；
-- [ ] 实现表和数据库的元数据（有哪些数据库，数据库里有哪些表，每个表的结构如何）的持久化。
+- [x] 实现数据库的创建、删除、切换；
+- [x] 实现表和数据库的元数据（有哪些数据库，数据库里有哪些表，每个表的结构如何）的持久化。
 - [ ] 重启数据库时从持久化的元数据中恢复系统信息。
 
 ###### SQL
@@ -39,7 +39,7 @@ For default configurations using JSON, relevant JSONObject and JSONArray shall b
 实现元数据管理模块后，ThssDB应当能够支持下列SQL语句（不区分大小写）：
 
 - [x] 创建数据库 ``create database dbName;``
-- [ ] 删除数据库 ``drop database dbName;``
+- [x] 删除数据库 ``drop database dbName;``
 - [x] 切换数据库 ``   use dbName;``
 - [x] 创建表：实现“NOT NULL”和“PRIMARY KEY”这两个关键字，Type为Int，Long，Float，Double，String（必须给出长度）之一。主键仅在某一列定义。
 
@@ -73,8 +73,6 @@ Schema Package:
   including ``String name, DataType type, int primaryKey, int length(only for String), boolean notNull. ``
 
 
-- Row: TODO
-
 此外，框架中的B+树索引，已在index模块中实现，包含的类有：
 
 - BPlusTree类：用主键entry做key，用真实的row作为value。
@@ -86,13 +84,13 @@ Schema Package:
 #### 基础要求
 
 - [ ] 实现数据记录的持久化（补充说明：后续测试过程中是内存受限场景，无法全部存储在内存中）。
-- [ ] 实现对记录的增加、删除、修改。
-- [ ] 支持五种数据类型：Int，Long，Float，Double，String。
-- [ ] 实现存储管理模块后，ThssDB应当能够支持下列SQL语句（不区分大小写）：
+- [x] 实现对记录的增加、删除、修改。
+- [x] 支持五种数据类型：Int，Long，Float，Double，String。
+- [x] 实现存储管理模块后，ThssDB应当能够支持下列SQL语句（不区分大小写）：
 
 ##### SQL
 
-- [ ] 数据写入：字符串需要用单引号包围。
+- [x] 数据写入：字符串需要用单引号包围。
 
 ```
 INSERT INTO [tableName(attrName1, attrName2,…, attrNameN)] VALUES (attrValue1, attrValue2,…, attrValueN);
@@ -100,13 +98,13 @@ INSERT INTO [tableName(attrName1, attrName2,…, attrNameN)] VALUES (attrValue1,
 INSERT INTO person(name) VALUES (‘Bob’)会提示字段ID不能为空
 ```
 
-- [ ] 数据删除：
+- [x] 数据删除：
 
 ```
 DELETE FROM tableName WHERE attrName = attValue;
 ```
 
-- [ ] 数据更新：
+- [x] 数据更新：
 
 ``` 
 UPDATE tableName SET attrName=attrValue 
@@ -115,9 +113,9 @@ WHERE attrName=attrValue;
 
 #### 进阶要求
 
-- [ ] 尝试实现更高效的文件存储格式，并在设计文档中说明设计思路及原理，可以考虑以下优化点：
-    - [ ] 提高I/O效率
-    - [ ] 减小外存空间占用（合理的编码方式、数据压缩）
+- [x] 尝试实现更高效的文件存储格式，并在设计文档中说明设计思路及原理，可以考虑以下优化点：
+    - [x] 提高I/O效率
+    - [x] 减小外存空间占用（合理的编码方式、数据压缩）
     - [x] 页式存储
 
 ### 查询模块
