@@ -26,6 +26,7 @@ public class ValueWrapperTest {
     ServerRuntime.config.testPath = "./testOnly";
     ServerRuntime.config.MetadataFilename = ServerRuntime.config.testPath + "/example.json";
     ServerRuntime.config.WALFilename = ServerRuntime.config.testPath + "/WAL.log";
+    ServerRuntime.config.DummyLogFilename = ServerRuntime.config.testPath + "/dummy.log";
 
     testDir = new File(ServerRuntime.config.testPath);
     try {
