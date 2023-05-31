@@ -4,7 +4,7 @@ public class PerformanceTestConfig {
 
   public static final int CLIENT_NUMBER = 10;
 
-  public static final int TABLE_NUMBER = 2;
+  public static final int TABLE_NUMBER = 3;
 
   public static final int OPERATION_NUMBER = 100000;
 

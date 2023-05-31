@@ -283,6 +283,7 @@ public class ServerRuntime {
 
     Timer timer = new Timer();
     timer.schedule(new DiskBuffer.Thrower(), 0, 100);
+    new Thread(() -> DiskBuffer.throwPages()).start();
 
     File metadataFile = new File(config.MetadataFilename);
     if (!metadataFile.exists()) {

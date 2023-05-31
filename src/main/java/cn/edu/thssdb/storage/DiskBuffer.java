@@ -26,7 +26,11 @@ public class DiskBuffer {
   public static class Thrower extends TimerTask {
     public void run() {
       //      System.out.println("start throw pages");
-      throwPages();
+
+//          System.gc();
+          System.out.println(persistPage.size() + " " + recoverArea.size());
+          System.out.println(Runtime.getRuntime().freeMemory());
+//      throwPages();
       //      System.out.println("start throw pages ok");
     }
   }
@@ -40,7 +44,7 @@ public class DiskBuffer {
   public static void throwPages() {
     //    System.out.println(buffer.estimatedSize() + " " + recoverArea.size());
     //    System.out.println(Thread.currentThread() + " start throw page");
-    System.out.println(persistPage.size() + " " + recoverArea.size());
+
     //    try {
     //      for (Long key : persistPage.keySet()) {
     //        HashSet<Page> set = persistPage.get(key);
@@ -70,35 +74,41 @@ public class DiskBuffer {
       Reference<?> ref;
       while (true) {
         ref = referenceQueue.poll();
-        if (ref == null) break;
-        Long key = throwSet.get(ref);
-        throwSet.remove(ref);
-        if (key == null) continue;
-        SharedSuite suite = recoverArea.get(key);
-        if (suite == null) continue;
-        int spaceId = (int) (key >> 32);
-        int pageId = key.intValue();
-        //        System.out.println("suitelock:" + suite.suiteLock);
-        //        System.out.println("suite counter:" + suite.counter + " " + pageId);
-        if (--suite.counter == 0) {
-          //          System.out.println( "suite counter:" + suite.counter + " recover size:" +
-          // recoverArea.size());
-          try {
-            DiskBuffer.output(key, suite);
-          } catch (Exception e) {
-            e.printStackTrace();
-            exit(45);
+        if (ref == null) {
+          Thread.sleep(0, 10);
+        } else {
+//          System.gc();
+//          System.out.println(persistPage.size() + " " + recoverArea.size());
+//          System.out.println(Runtime.getRuntime().freeMemory());
+          Long key = throwSet.get(ref);
+          throwSet.remove(ref);
+          if (key == null) continue;
+          SharedSuite suite = recoverArea.get(key);
+          if (suite == null) continue;
+          int spaceId = (int) (key >> 32);
+          int pageId = key.intValue();
+          //        System.out.println("suitelock:" + suite.suiteLock);
+          //        System.out.println("suite counter:" + suite.counter + " " + pageId);
+          if (--suite.counter == 0) {
+            //          System.out.println( "suite counter:" + suite.counter + " recover size:" +
+            // recoverArea.size());
+            try {
+              DiskBuffer.output(key, suite);
+            } catch (Exception e) {
+              e.printStackTrace();
+              exit(45);
+            }
+            recoverArea.remove(key);
+            //          System.out.println( "remove really! spaceId:" + (int) (key >> 32) + " " +
+            // key.intValue() + " " + recoverArea.size());
           }
-          recoverArea.remove(key);
-          //          System.out.println( "remove really! spaceId:" + (int) (key >> 32) + " " +
-          // key.intValue() + " " + recoverArea.size());
         }
       }
     } catch (Exception e) {
       e.printStackTrace();
       exit(44);
     }
-    System.out.println(Thread.currentThread() + " start throw page ok");
+//    System.out.println(Thread.currentThread() + " start throw page ok");
   }
 
   /**
@@ -107,7 +117,7 @@ public class DiskBuffer {
    */
   public static final LoadingCache<Long, Page> buffer =
       Caffeine.newBuilder()
-          .maximumSize(100)
+          .maximumSize(30)
           .removalListener(
               (Long key, Page page, RemovalCause cause) -> {
                 //                System.out.println("throw out removal listener:" +
@@ -119,6 +129,7 @@ public class DiskBuffer {
                 //                System.out.println("buffer lock:" + bufferLock);
                 //                System.out.println("get from buffer:" + key.intValue());
                 //                System.out.println("get from buffer:" + key.intValue());
+                if( Runtime.getRuntime().freeMemory() <= 2000000 ) Thread.sleep(0, 100);
                 int spaceId = (int) (key >> 32);
                 int pageId = key.intValue();
                 //                System.out.println("get from buffer:" + key.intValue());
