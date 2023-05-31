@@ -575,38 +575,23 @@ public class IndexPage extends Page {
       /* only root page can have access to this method. */
       return null;
     }
-    //    System.out.println("get leftmost data page.");
-    Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
-    RecordInPage record = infimumRecord.nextRecordInPage;
-    if (record.recordType == RecordInPage.USER_DATA_RECORD
-        || record.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
-      //      this.pageReadAndWriteLatch.readLock().lock();
-      record = infimumRecord.nextRecordInPage;
-      if (record.recordType == RecordInPage.USER_DATA_RECORD
-          || record.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
-        ServerRuntime.getReadLock(transactionId, this.pageReadAndWriteLatch, this);
-        //        this.pageReadAndWriteLatch.readLock().unlock();
-
-        ArrayList<RecordLogical> recordList = new ArrayList<>();
-        while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
-          if (record.isNotDeleted()) {
-            recordList.add(new RecordLogical(record));
-          }
-          record = record.nextRecordInPage;
-        }
-
-        //        System.out.println(transactionId + " release read lock " + this.pageId);
-        ServerRuntime.releaseReadLock(this.pageReadAndWriteLatch);
-        //        System.out.println(transactionId + " release read lock ok" + this.pageId);
-        return new Pair<>(0, recordList);
-      } else if (record.recordType == RecordInPage.USER_POINTER_RECORD) {
-        //        this.pageReadAndWriteLatch.readLock().unlock();
-        return new Pair<>(ServerRuntime.config.indexLeftmostLeafIndex, new ArrayList<>());
-      }
-    } else if (record.recordType == RecordInPage.USER_POINTER_RECORD) {
+    if (this.pageReadAndWriteLatch == null)
+      return new Pair<>(ServerRuntime.config.indexLeftmostLeafIndex, new ArrayList<>());
+    firstSplitLock.lock();
+    if (this.infimumRecord.nextRecordInPage.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+      firstSplitLock.unlock();
       return new Pair<>(ServerRuntime.config.indexLeftmostLeafIndex, new ArrayList<>());
     }
-
+    try {
+      IndexPage leftPage =
+          (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexLeftmostLeafIndex);
+      ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch, leftPage);
+      firstSplitLock.unlock();
+      return new Pair<>(0, new ArrayList<>());
+    } catch (Exception e) {
+      System.out.println(e);
+      exit(24);
+    }
     /* This shall never happen! */
     return new Pair<>(-1, new ArrayList<>());
   }
