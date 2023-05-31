@@ -49,6 +49,6 @@ public class IServiceHandler implements IService.Iface {
     }
 
     LogicalPlan plan = LogicalGenerator.generate(req.statement);
-    return ServerRuntime.runPlan(req.getSessionId(), plan);
+    return ServerRuntime.runPlan(req.getSessionId(), plan, req.statement);
   }
 }

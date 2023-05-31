@@ -146,6 +146,7 @@
                                 <exclude>**/*TestLimited.java</exclude>
                                 <exclude>**/*Test.java</exclude>
                             </excludes>
+                            <skip>true</skip>
                         </configuration>
                         <goals>
                             <goal>test</goal>

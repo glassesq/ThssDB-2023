@@ -250,7 +250,7 @@ public class CRUDTestExecutor extends TestExecutor {
     Set<List<Object>> tableData = dataMap.get("test_table2");
     for (List<Object> rowData : tableData) {
       if ((float) rowData.get(2) == 50) {
-        rowData.set(2, Float.parseFloat("100"));
+        rowData.set(2, 100f);
       }
     }
 
@@ -264,7 +264,7 @@ public class CRUDTestExecutor extends TestExecutor {
     List<Integer> columnList = new ArrayList<>();
     columnList.add(1);
     columnList.add(2);
-    Set<List<Object>> expectedResult = extractData(dataMap.get("test_table2"), columnList);
+    Set<List<Object>> expectedResult = extractData(dataMap.get("test_table1"), columnList);
 
     Assert.assertTrue(equals(queryResult, expectedResult));
 
@@ -275,7 +275,7 @@ public class CRUDTestExecutor extends TestExecutor {
     tableData = dataMap.get("test_table3");
     for (List<Object> rowData : tableData) {
       if ((float) rowData.get(2) == 50) {
-        rowData.set(3, Double.parseDouble("100"));
+        rowData.set(3, 100d);
       }
     }
 
@@ -289,7 +289,7 @@ public class CRUDTestExecutor extends TestExecutor {
     columnList.clear();
     columnList.add(2);
     columnList.add(3);
-    expectedResult = extractData(dataMap.get("test_table3"), columnList);
+    expectedResult = extractData(dataMap.get("test_table1"), columnList);
 
     Assert.assertTrue(equals(queryResult, expectedResult));
   }

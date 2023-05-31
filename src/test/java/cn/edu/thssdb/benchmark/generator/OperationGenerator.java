@@ -1,7 +1,8 @@
 package cn.edu.thssdb.benchmark.generator;
 
+import cn.edu.thssdb.benchmark.transaction.ITransaction;
 import cn.edu.thssdb.benchmark.transaction.OperationType;
-import cn.edu.thssdb.benchmark.transaction.Transaction;
+import cn.edu.thssdb.benchmark.transaction.SingleSQLTransaction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -16,7 +17,7 @@ public class OperationGenerator {
     operationFactory = new OperationFactory(sqlGenerator);
   }
 
-  public Transaction generateTransaction(OperationType type) {
+  public ITransaction generateTransaction(OperationType type) {
     return operationFactory.newOperation(type);
   }
 
@@ -27,52 +28,22 @@ public class OperationGenerator {
       this.sqlGenerator = sqlGenerator;
     }
 
-    public Transaction newOperation(OperationType type) {
+    public ITransaction newOperation(OperationType type) {
       switch (type) {
         case INSERT:
-          return generateInsertTransaction();
+          return new SingleSQLTransaction(sqlGenerator.generateInsertSQL());
         case UPDATE:
-          return generateUpdateTransaction();
+          return new SingleSQLTransaction(sqlGenerator.generateUpdateSQL());
         case DELETE:
-          return generateDeleteTransaction();
+          return new SingleSQLTransaction(sqlGenerator.generateDeleteSQL());
         case QUERY:
-          return generateQueryTransaction();
+          return new SingleSQLTransaction(sqlGenerator.generateQuerySQL());
         case JOIN:
-          return generateJoinTransaction();
+          return new SingleSQLTransaction(sqlGenerator.generateJoinSQL());
         default:
-          LOGGER.error("Invalid transaction type.");
+          LOGGER.error("Invalid operation type.");
       }
       return null;
-    }
-
-    private Transaction generateInsertTransaction() {
-      String[] sqlList = new String[1];
-      sqlList[0] = sqlGenerator.generateInsertSQL();
-      return new Transaction(sqlList);
-    }
-
-    private Transaction generateUpdateTransaction() {
-      String[] sqlList = new String[1];
-      sqlList[0] = sqlGenerator.generateUpdateSQL();
-      return new Transaction(sqlList);
-    }
-
-    private Transaction generateDeleteTransaction() {
-      String[] sqlList = new String[1];
-      sqlList[0] = sqlGenerator.generateDeleteSQL();
-      return new Transaction(sqlList);
-    }
-
-    private Transaction generateQueryTransaction() {
-      String[] sqlList = new String[1];
-      sqlList[0] = sqlGenerator.generateQuerySQL();
-      return new Transaction(sqlList);
-    }
-
-    private Transaction generateJoinTransaction() {
-      String[] sqlList = new String[1];
-      sqlList[0] = sqlGenerator.generateJoinSQL();
-      return new Transaction(sqlList);
     }
   }
 }

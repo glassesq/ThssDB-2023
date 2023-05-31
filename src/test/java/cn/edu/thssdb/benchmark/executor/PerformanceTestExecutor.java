@@ -3,11 +3,12 @@ package cn.edu.thssdb.benchmark.executor;
 import cn.edu.thssdb.benchmark.common.Client;
 import cn.edu.thssdb.benchmark.common.Constants;
 import cn.edu.thssdb.benchmark.common.TableSchema;
+import cn.edu.thssdb.benchmark.config.PerformanceTestConfig;
 import cn.edu.thssdb.benchmark.generator.BaseDataGenerator;
 import cn.edu.thssdb.benchmark.generator.OperationGenerator;
 import cn.edu.thssdb.benchmark.generator.PerformanceDataGenerator;
+import cn.edu.thssdb.benchmark.transaction.ITransaction;
 import cn.edu.thssdb.benchmark.transaction.OperationType;
-import cn.edu.thssdb.benchmark.transaction.Transaction;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import com.clearspring.analytics.stream.quantile.TDigest;
 import org.apache.thrift.TException;
@@ -26,17 +27,15 @@ import java.util.concurrent.CompletableFuture;
 
 public class PerformanceTestExecutor extends TestExecutor {
   private static final Logger LOGGER = LoggerFactory.getLogger(PerformanceTestExecutor.class);
-  private static final int DATA_SEED = 667;
+  private static final int DATA_SEED = PerformanceTestConfig.DATA_SEED;
   private static final Map<OperationType, TDigest> transactionLatencyDigest =
       new EnumMap<>(OperationType.class);
   private List<Client> clients;
   private Map<Integer, PerformanceTestExecutor.Measurement> measurements = new HashMap<>();
-  // TODO: use for insert test!
-  private int CLIENT_NUMBER = 10;
-  private int TABLE_NUMBER = 1;
-  private int OPERATION_NUMBER = 500;
-  private String OPERATION_RATIO = "80:0:0:20:0";
-  /* insert update delete query join */
+  private int CLIENT_NUMBER = PerformanceTestConfig.CLIENT_NUMBER;
+  private int TABLE_NUMBER = PerformanceTestConfig.TABLE_NUMBER;
+  private int OPERATION_NUMBER = PerformanceTestConfig.OPERATION_NUMBER;
+  private String OPERATION_RATIO = PerformanceTestConfig.OPERATION_RATIO;
 
   BaseDataGenerator dataGenerator;
   WeightedRandomPicker weightedRandomPicker;
@@ -73,7 +72,9 @@ public class PerformanceTestExecutor extends TestExecutor {
     for (TableSchema tableSchema : dataGenerator.getSchemaMap().values()) {
       createTable(tableSchema, clients.get(0));
     }
+
     // performance test
+    long startTestTime = System.currentTimeMillis();
     List<CompletableFuture<Void>> futures = new ArrayList<>();
     for (int i = 0; i < CLIENT_NUMBER; i++) {
       int index = i;
@@ -88,12 +89,13 @@ public class PerformanceTestExecutor extends TestExecutor {
                   PerformanceTestExecutor.Measurement measurement = measurements.get(index);
                   for (int m = 0; m < OPERATION_NUMBER; m++) {
                     OperationType type = OperationType.values()[weightedRandomPicker.getNext()];
-                    Transaction transaction = operationGenerator.generateTransaction(type);
+                    ITransaction transaction = operationGenerator.generateTransaction(type);
                     long startTime = System.nanoTime();
                     transaction.execute(client);
                     long finishTime = System.nanoTime();
                     // Assert.assertEquals(Constants.SUCCESS_STATUS_CODE, resp.status.code);
-                    measurement.record(type, transaction.getSize(), finishTime - startTime);
+                    measurement.record(
+                        type, transaction.getTransactionSize(), finishTime - startTime);
                   }
                   LOGGER.info("Finish Performance Test for Client-" + index);
                 } catch (Exception e) {
@@ -103,25 +105,39 @@ public class PerformanceTestExecutor extends TestExecutor {
       futures.add(completableFuture);
     }
     CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+    long endTestTime = System.currentTimeMillis();
+    LOGGER.info("Finish performance test after {} ms", endTestTime - startTestTime);
+
     // calculate measurement
     List<Double> quantiles = Arrays.asList(0.0, 0.25, 0.5, 0.75, 0.9, 0.99, 1.0);
+
+    long allOperationNumber = 0;
+    long allLatencyNumber = 0;
     for (OperationType type : OperationType.values()) {
       TDigest digest = transactionLatencyDigest.get(type);
       double totalLatency = 0.0;
       long totalNumber = 0;
-      long totalPoint = 0;
-      for (Double quantile : quantiles) {
-        LOGGER.info(type + "-" + quantile + ": " + (digest.quantile(quantile) / 1e6) + " ms");
-      }
       for (PerformanceTestExecutor.Measurement measurement : measurements.values()) {
         totalLatency += measurement.gettransactionLatencySumThisClient().get(type);
-        totalPoint += measurement.getOkSQLNumMap().get(type);
         totalNumber += measurement.getOktransactionNumMap().get(type);
       }
+      allOperationNumber += totalNumber;
+      allLatencyNumber += totalLatency;
+      LOGGER.info(type + " operation count: " + totalNumber);
       LOGGER.info(type + " per second: " + (totalNumber / (totalLatency / 1e9)));
-      LOGGER.info(type + " sql per second: " + (totalPoint / (totalLatency / 1e9)));
-      return;
+      try {
+        List<Double> results = new ArrayList<>();
+        for (Double quantile : quantiles) {
+          results.add(digest.quantile(quantile));
+        }
+        for (int i = 0; i < quantiles.size(); i++) {
+          LOGGER.info(type + "-" + quantiles.get(i) + ": " + (results.get(i) / 1e6) + " ms");
+        }
+      } catch (Exception ignored) {
+      }
     }
+    LOGGER.info("Total operation count: {}", allOperationNumber);
+    LOGGER.info("Avg latency of all operations:{} ns", (allLatencyNumber / (allOperationNumber)));
   }
 
   @Override

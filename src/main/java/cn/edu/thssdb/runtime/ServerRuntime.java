@@ -4,19 +4,21 @@ import cn.edu.thssdb.plan.LogicalPlan;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import cn.edu.thssdb.schema.Database;
 import cn.edu.thssdb.schema.Table;
+import cn.edu.thssdb.storage.DiskBuffer;
+import cn.edu.thssdb.storage.page.IndexPage;
+import cn.edu.thssdb.storage.page.Page;
+import cn.edu.thssdb.storage.writeahead.DummyLog;
 import cn.edu.thssdb.utils.StatusUtil;
 import org.json.JSONArray;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import static java.lang.System.exit;
 
 /**
  * The runtime of the database server. Every member variable and function shall be static in this
@@ -44,7 +46,9 @@ public class ServerRuntime {
   private static final AtomicLong transactionCounter = new AtomicLong(0);
 
   /** A map from {@code transactionId} to the locks it holds. */
-  public static HashMap<Long, ArrayList<Lock>> locks = new HashMap<>();
+  public static ConcurrentHashMap<Long, ArrayList<Lock>> locks = new ConcurrentHashMap<>();
+
+  public static ConcurrentHashMap<Long, HashSet<Page>> persistPage = new ConcurrentHashMap<>();
 
   private static final AtomicInteger tablespaceCounter = new AtomicInteger(0);
 
@@ -69,19 +73,17 @@ public class ServerRuntime {
    * @param transactionId transaction id
    * @param lock lock
    */
-  public static void getWriteLock(long transactionId, ReentrantReadWriteLock lock) {
+  public static void getWriteLock(
+      long transactionId, ReentrantReadWriteLock lock, IndexPage tracePage) {
+    // TODO: save pages because of soft referenced cache.
     if (lock == null) return;
-    try {
-      while (lock.getReadHoldCount() > 0) {
-        /* We are doing an upgrade now! */
-        lock.readLock().unlock();
-        locks.get(transactionId).remove(lock.readLock());
-      }
-    } catch (Exception e) {
-      System.out.println(e);
-      exit(1);
-    }
+    if (!persistPage.containsKey(transactionId)) persistPage.put(transactionId, new HashSet<>());
+    persistPage.get(transactionId).add(tracePage);
+    //    IO.writeDummyStatementLog( transactionId, Thread.currentThread() + " get write lock of" +
+    // tracePage.pageId + " " + lock + " " + lock.writeLock());
+    //    System.out.println(transactionId + " get write lock for page " + tracePage.pageId);
     getTwoPhaseLock(transactionId, lock.writeLock());
+    //    System.out.println(transactionId + " get write lock for page succeed" + tracePage.pageId);
   }
 
   /**
@@ -90,13 +92,21 @@ public class ServerRuntime {
    * @param transactionId transaction id
    * @param lock lock
    */
-  public static void getReadLock(long transactionId, ReentrantReadWriteLock lock) {
+  public static void getReadLock(
+      long transactionId, ReentrantReadWriteLock lock, IndexPage tracePage) {
     if (lock == null) return;
     //    System.out.println(transactionId + " get read lock");
     if (config.serializable) {
+      if (!persistPage.containsKey(transactionId)) persistPage.put(transactionId, new HashSet<>());
+      persistPage.get(transactionId).add(tracePage);
       getTwoPhaseLock(transactionId, lock.readLock());
     } else {
+      //      System.out.println(transactionId + " get read lock for page " + tracePage.pageId);
+      if (!persistPage.containsKey(transactionId)) persistPage.put(transactionId, new HashSet<>());
+      persistPage.get(transactionId).add(tracePage);
       lock.readLock().lock();
+      //      System.out.println(transactionId + " get read lock for page succeed" +
+      // tracePage.pageId);
     }
   }
 
@@ -120,10 +130,18 @@ public class ServerRuntime {
   public static void releaseAllLocks(long transactionId) {
     //    System.out.println(transactionId + " release all locks " +
     // locks.get(transactionId).size());
+    if (locks.get(transactionId) == null) return;
     for (Lock lock : locks.get(transactionId)) {
       lock.unlock();
+      //      System.out.println(transactionId + " release lock " + lock);
     }
     locks.remove(transactionId);
+
+    HashSet<Page> pages = persistPage.get(transactionId);
+    if (pages == null) return;
+    //    System.out.println("throw " + pages.size() + "pages");
+    pages.clear();
+    persistPage.remove(transactionId);
   }
 
   /**
@@ -181,6 +199,7 @@ public class ServerRuntime {
     SessionRuntime sessionRuntime = new SessionRuntime();
     sessions.put(sessionId, sessionRuntime);
     sessionRuntime.sessionId = sessionId;
+    System.out.println(Thread.currentThread() + " " + sessionId);
     return sessionId;
   }
 
@@ -226,7 +245,7 @@ public class ServerRuntime {
    * @param plan the logical plan.
    * @return executeStatementResp.
    */
-  public static ExecuteStatementResp runPlan(long sessionId, LogicalPlan plan) {
+  public static ExecuteStatementResp runPlan(long sessionId, LogicalPlan plan, String statement) {
     SessionRuntime sessionRuntime = sessions.get(sessionId);
     if (sessionRuntime == null) {
       return new ExecuteStatementResp(
@@ -236,7 +255,9 @@ public class ServerRuntime {
                   + ". Uncommitted actions shall be automatically aborted. Please connect to the server again."),
           false);
     }
-    ExecuteStatementResp response = sessionRuntime.runPlan(plan);
+    ExecuteStatementResp response = sessionRuntime.runPlan(plan, statement);
+    //    System.out.println("SESSION ID: " + sessionId + " THREAD: " +
+    // Thread.currentThread().getId());
     //    System.out.println( sessionRuntime.sessionId + " END ITS RUN
     // PLAN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     return response;
@@ -249,9 +270,20 @@ public class ServerRuntime {
    * @throws Exception create WALFile failed.
    */
   public static void setup() throws Exception {
-    File WALFile = new File(config.WALFilename);
-    WALFile.createNewFile();
-    if (!WALFile.exists()) throw new Exception("We cannot create WAL file.");
+    if (config.useDummyLog) {
+      File DummyFile = new File(config.DummyLogFilename);
+      DummyFile.createNewFile();
+      if (!DummyFile.exists()) throw new Exception("We cannot create WAL file.");
+      DummyLog.writer = new BufferedWriter(new FileWriter(config.DummyLogFilename, true));
+    } else {
+      File WALFile = new File(config.WALFilename);
+      WALFile.createNewFile();
+      if (!WALFile.exists()) throw new Exception("We cannot create WAL file.");
+    }
+
+    Timer timer = new Timer();
+    timer.schedule(new DiskBuffer.Thrower(), 0, 100);
+
     File metadataFile = new File(config.MetadataFilename);
     if (!metadataFile.exists()) {
       metadataFile.createNewFile();

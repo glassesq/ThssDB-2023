@@ -2,11 +2,24 @@ package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.communication.IO;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /** Basic class for all page */
 public class Page {
+  public SharedSuite makeSuite() {
+    SharedSuite suite = new SharedSuite();
+    suite.bLinkTreeLatch = this.bLinkTreeLatch;
+    suite.bytes = this.bytes;
+    suite.infimumRecord = this.infimumRecord;
+    suite.pageWriteAndOutputLatch = this.pageWriteAndOutputLatch;
+    suite.firstSplitLatch = this.firstSplitLock;
+    suite.pageReadAndWriteLatch = this.pageReadAndWriteLatch;
+    suite.maxPageId = this.maxPageId;
+    suite.counter = 1;
+    return suite;
+  }
 
   public ReentrantReadWriteLock pageReadAndWriteLatch = new ReentrantReadWriteLock();
   public ReentrantLock pageWriteAndOutputLatch = new ReentrantLock();
@@ -49,104 +62,16 @@ public class Page {
   public static final int INDEX_PAGE = 2;
   public static final int DATA_PAGE = 3;
 
-  /** List Node for Double Linked List. In form of (PageId, Offset). */
-  public class ListNode {
-    //        int previousPageId;
-    //       int previousOffset;
-    public int nextPageId;
-    public int nextOffset;
-
-    public void parse(int pos) {
-      /*
-      RESERVED 6 byte for two-way linked list
-      previousPageId = parseIntegerBig(pos);
-      previousOffset = parseShortBig(pos + 4);
-      */
-      nextPageId = parseIntegerBig(pos + 6);
-      nextOffset = parseShortBig(pos + 10);
-    }
-
-    /**
-     * Write the list node info on both disk buffer and WAL log buffer. This method can be safely
-     * used.
-     *
-     * @param page on which the node resides.
-     * @param pos offset where the listNode starts.
-     */
-    public void write(long transactionId, Page page, int pos) {
-      byte[] newValues = new byte[16];
-      /* RESERVED 6 byte for two-way linked list
-      newValues[0] = (byte) (previousPageId >> 24);
-      newValues[1] = (byte) (previousPageId >> 16);
-      newValues[2] = (byte) (previousPageId >> 8);
-      newValues[3] = (byte) previousPageId;
-      newValues[4] = (byte) (previousOffset >> 8);
-      newValues[5] = (byte) previousOffset;
-       */
-      newValues[6] = (byte) (nextPageId >> 24);
-      newValues[7] = (byte) (nextPageId >> 16);
-      newValues[8] = (byte) (nextPageId >> 8);
-      newValues[9] = (byte) nextPageId;
-      newValues[10] = (byte) (nextOffset >> 8);
-      newValues[11] = (byte) nextOffset;
-      IO.write(transactionId, page, pos, 12, newValues, false);
-    }
-  }
-
-  /**
-   * List Base Node for Double Linked List. In form of (PageId, Offset). Compared to List Node, it
-   * has additional length field.
-   */
-  public class ListBaseNode {
-    int length;
-    int nextPageId;
-    int nextOffset;
-
-    public void parse(int pos) {
-      length = parseIntegerBig(pos);
-      /*
-      RESERVED for two-way linked list.
-      previousPageId = parseIntegerBig(pos + 4);
-      previousOffset = parseShortBig(pos + 8);
-       */
-      nextPageId = parseIntegerBig(pos + 10);
-      nextOffset = parseShortBig(pos + 14);
-    }
-
-    /**
-     * Write the list base node info on both disk buffer and WAL log buffer. This method can be
-     * safely used.
-     *
-     * @param page on which the node resides.
-     * @param pos offset where the listBaseNode starts.
-     */
-    public void write(long transactionId, Page page, int pos) {
-      byte[] newValues = new byte[20];
-      newValues[0] = (byte) (length >> 24);
-      newValues[1] = (byte) (length >> 16);
-      newValues[2] = (byte) (length >> 8);
-      newValues[3] = (byte) length;
-      /*
-      RESERVED for two-way linked list.
-      newValues[pos + 4] = (byte) (previousPageId >> 24);
-      newValues[pos + 5] = (byte) (previousPageId >> 16);
-      newValues[pos + 6] = (byte) (previousPageId >> 8);
-      newValues[pos + 7] = (byte) previousPageId;
-      newValues[pos + 8] = (byte) (previousOffset >> 8);
-      newValues[pos + 9] = (byte) previousOffset;
-       */
-      newValues[10] = (byte) (nextPageId >> 24);
-      newValues[11] = (byte) (nextPageId >> 16);
-      newValues[12] = (byte) (nextPageId >> 8);
-      newValues[13] = (byte) nextPageId;
-      newValues[14] = (byte) (nextOffset >> 8);
-      newValues[15] = (byte) nextOffset;
-      IO.write(transactionId, page, pos, 16, newValues, false);
-    }
-  }
-
   /* raw bytes of this page. */
   public byte[] bytes;
+
+  public ReentrantLock firstSplitLock = new ReentrantLock();
+
+  public ReentrantLock bLinkTreeLatch = new ReentrantLock();
+
+  public IndexPage.RecordInPage infimumRecord;
+
+  public AtomicInteger maxPageId = null;
 
   public Page(byte[] bytes) {
     this.bytes = bytes;
@@ -223,5 +148,25 @@ public class Page {
     newValue[30] = (byte) (nextPageId >> 8);
     newValue[31] = (byte) (nextPageId);
     IO.write(transactionId, this, 0, 32, newValue, false);
+  }
+
+  //  @Override
+  //  protected void finalize() throws Throwable {
+  //    System.out.println("finalize: " + Thread.currentThread());
+  //    System.out.println("Page " + pageId + " is finalized.");
+  //    System.out.println(this.pageReadAndWriteLatch);
+  //    super.finalize();
+  //  }
+
+  public boolean isShadow() {
+    return true;
+  }
+
+  public boolean shadow() {
+    return true;
+  }
+
+  public boolean unShadow() {
+    return true;
   }
 }

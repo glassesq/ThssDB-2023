@@ -11,8 +11,11 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 public class WriteLog {
 
+  public static int checkpointSize = 0;
+  public static FileOutputStream stream;
   public static ReentrantReadWriteLock writeLogBufferLatch = new ReentrantReadWriteLock();
   public static ReentrantLock writeLogFileLatch = new ReentrantLock();
+  public static String logString = "";
 
   public static class WriteLogEntry {
     byte[] newValue;
@@ -117,9 +120,8 @@ public class WriteLog {
     }
 
     public void writeToDisk() throws Exception {
-      FileOutputStream stream = new FileOutputStream(ServerRuntime.config.WALFilename, true);
-      stream.write((this + "\n").getBytes());
-      stream.close();
+      WriteLog.stream.write((this + "\n").getBytes());
+      //      WriteLogstream.close();
     }
   }
 
@@ -169,7 +171,8 @@ public class WriteLog {
               transactionId, spaceId, pageId, offset, length, oldValue, newValue, true);
     }
     entry.type = COMMON_LOG; /* 0 for common entry */
-    buffer.add(entry);
+    //    buffer.add(entry);
+    logString += entry.toString() + "\n";
 
     writeLogBufferLatch.readLock().unlock();
   }
@@ -178,7 +181,9 @@ public class WriteLog {
     writeLogBufferLatch.readLock().lock();
 
     WriteLogEntry entry = new WriteLogEntry(transactionId, type);
-    buffer.add(entry);
+    //    buffer.add(entry);
+    //    logString += entry.toString();
+    logString += entry.toString() + "\n";
 
     writeLogBufferLatch.readLock().unlock();
   }
@@ -190,7 +195,9 @@ public class WriteLog {
     WriteLogEntry entry = new WriteLogEntry(transactionId, type);
     entry.databaseId = databaseId;
     entry.newValue = databaseName;
-    buffer.add(entry);
+    //    buffer.add(entry);
+    //    logString += entry.toString();
+    logString += entry.toString() + "\n";
 
     writeLogBufferLatch.readLock().unlock();
   }
@@ -202,7 +209,9 @@ public class WriteLog {
     WriteLogEntry entry = new WriteLogEntry(transactionId, CREATE_TABLE_LOG);
     entry.databaseId = databaseId;
     entry.newValue = metadata.object.toString().getBytes(StandardCharsets.UTF_8);
-    buffer.add(entry);
+    //    buffer.add(entry);
+    //    logString += entry.toString();
+    logString += entry.toString() + "\n";
 
     writeLogBufferLatch.readLock().unlock();
   }
@@ -213,10 +222,16 @@ public class WriteLog {
     /* avoid writing WAL buffer and outputting it to disk simultaneously */
     WriteLog.writeLogBufferLatch.writeLock().lock();
 
-    for (WriteLog.WriteLogEntry entry : WriteLog.buffer) {
-      entry.writeToDisk();
-    }
-    WriteLog.buffer.clear();
+    stream = new FileOutputStream(ServerRuntime.config.WALFilename, true);
+
+    WriteLog.stream.write(logString.getBytes());
+    logString = "";
+    //    logString += entry.toString() + "\n";
+    //    for (WriteLog.WriteLogEntry entry : WriteLog.buffer) {
+    //      entry.writeToDisk();
+    //    }
+    //    WriteLog.buffer.clear();
+    stream.close();
 
     /* avoid writing WAL buffer and outputting it to disk simultaneously */
     WriteLog.writeLogBufferLatch.writeLock().unlock();

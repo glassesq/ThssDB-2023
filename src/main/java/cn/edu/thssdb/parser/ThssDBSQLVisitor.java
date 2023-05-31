@@ -135,11 +135,12 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
     List<SQLParser.ValueEntryContext> valueEntries = ctx.valueEntry();
     ArrayList<ArrayList<String>> values = new ArrayList<>();
     for (SQLParser.ValueEntryContext valueEntry : valueEntries) {
-      if (columnName.size() > 0 && valueEntry.literalValue().size() != columnName.size()) {
+      List<SQLParser.LiteralValueContext> literalValues = valueEntry.literalValue();
+      if (columnName.size() > 0 && literalValues.size() != columnName.size()) {
         return new InsertPlan(tableName, true);
       }
       ArrayList<String> value = new ArrayList<>();
-      for (SQLParser.LiteralValueContext literalValueContext : valueEntry.literalValue()) {
+      for (SQLParser.LiteralValueContext literalValueContext : literalValues) {
         value.add(literalValueContext.getText());
       }
       values.add(value);

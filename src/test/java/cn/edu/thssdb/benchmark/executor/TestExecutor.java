@@ -11,7 +11,7 @@ import org.slf4j.LoggerFactory;
 
 public abstract class TestExecutor {
 
-  private static final Logger LOGGER = LoggerFactory.getLogger(CRUDTestExecutor.class);
+  private static final Logger LOGGER = LoggerFactory.getLogger(TestExecutor.class);
 
   public abstract void close();
 

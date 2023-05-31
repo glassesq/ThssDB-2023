@@ -2,7 +2,7 @@ package cn.edu.thssdb.benchmark.config;
 
 import cn.edu.thssdb.utils.Global;
 
-public class Config {
+public class CommonConfig {
   public static final String username = "root";
   public static final String password = "root";
   public static final String host = "127.0.0.1";

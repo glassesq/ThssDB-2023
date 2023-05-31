@@ -291,9 +291,13 @@ public class Table {
       }
 
       OverallPage.createOverallPage(transactionId, spaceId, 0);
-      System.out.println("overall page over.");
+      //      System.out.println("overall page over.");
       IndexPage indexPage = IndexPage.createIndexPage(transactionId, spaceId, 2);
-      System.out.println("index root page over.");
+      //      System.out.println("index root page over.");
+      IndexPage leftmostPage =
+          IndexPage.createIndexPage(
+              transactionId, spaceId, ServerRuntime.config.indexLeftmostLeafIndex);
+      //      System.out.println("left most data page over.");
     }
 
     /**

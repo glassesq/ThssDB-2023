@@ -34,7 +34,7 @@ public class PerformanceDataGenerator extends BaseDataGenerator {
         types.add(Constants.columnTypes[columnId % Constants.columnTypes.length]);
         notNull.add(false);
       }
-      schemaMap.put(tableName, new TableSchema(tableName, columns, types, notNull, tableId));
+      schemaMap.put(tableName, new TableSchema(tableName, columns, types, notNull, 0));
     }
   }
 

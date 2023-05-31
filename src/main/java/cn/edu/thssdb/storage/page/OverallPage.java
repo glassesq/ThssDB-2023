@@ -7,11 +7,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class OverallPage extends Page {
   /* Tablespace Header */
-  public AtomicInteger maxPageId = new AtomicInteger();
 
-  public int maxInitedPage;
+  //  public int maxInitedPage;
 
-  public int currentDataPage;
+  //  public int currentDataPage;
 
   public int flags;
 
@@ -40,9 +39,10 @@ public class OverallPage extends Page {
   }
 
   private void parseTablespace() {
-    maxPageId.set(parseIntegerBig(32 + 4));
-    maxInitedPage = parseIntegerBig(32 + 8);
-    currentDataPage = parseIntegerBig(32 + 12);
+    if (maxPageId == null) maxPageId = new AtomicInteger();
+    maxPageId.set(parseIntegerBig(32));
+    //    maxInitedPage = parseIntegerBig(32 + 8);
+    //    currentDataPage = parseIntegerBig(32 + 12);
     flags = parseIntegerBig(32 + 16);
     /* RESERVED FOR 52 bytes */
   }
@@ -55,18 +55,19 @@ public class OverallPage extends Page {
   public void writeTablespace(long transactionId) {
     /* First 16 valid bytes */
     byte[] newValue = new byte[16];
-    newValue[0] = (byte) (maxPageId.get() >> 24);
-    newValue[1] = (byte) (maxPageId.get() >> 16);
-    newValue[2] = (byte) (maxPageId.get() >> 8);
-    newValue[3] = (byte) maxPageId.get();
-    newValue[4] = (byte) (maxInitedPage >> 24);
-    newValue[5] = (byte) (maxInitedPage >> 16);
-    newValue[6] = (byte) (maxInitedPage >> 8);
-    newValue[7] = (byte) maxInitedPage;
-    newValue[8] = (byte) (currentDataPage >> 24);
-    newValue[9] = (byte) (currentDataPage >> 16);
-    newValue[10] = (byte) (currentDataPage >> 8);
-    newValue[11] = (byte) currentDataPage;
+    int value = maxPageId.get();
+    newValue[0] = (byte) (value >> 24);
+    newValue[1] = (byte) (value >> 16);
+    newValue[2] = (byte) (value >> 8);
+    newValue[3] = (byte) value;
+    //    newValue[4] = (byte) (maxInitedPage >> 24);
+    //    newValue[5] = (byte) (maxInitedPage >> 16);
+    //    newValue[6] = (byte) (maxInitedPage >> 8);
+    //    newValue[7] = (byte) maxInitedPage;
+    //    newValue[8] = (byte) (currentDataPage >> 24);
+    //    newValue[9] = (byte) (currentDataPage >> 16);
+    //    newValue[10] = (byte) (currentDataPage >> 8);
+    //    newValue[11] = (byte) currentDataPage;
     newValue[12] = (byte) (flags >> 24);
     newValue[13] = (byte) (flags >> 16);
     newValue[14] = (byte) (flags >> 8);
@@ -79,9 +80,12 @@ public class OverallPage extends Page {
    *
    * @return allocated pageId.
    */
-  public synchronized int allocatePage(long transactionId) throws Exception {
+  public int allocatePage(long transactionId) throws Exception {
+    //    System.out.println( "################################# allocate new page: try for " +
+    // transactionId + " in space:" + spaceId);
     int allocatedPageId = maxPageId.incrementAndGet();
-    System.out.println("################################# allocate new page: " + allocatedPageId);
+    //    System.out.println("################################# allocate new page: " +
+    // allocatedPageId);
     writeTablespace(transactionId);
     return allocatedPageId;
   }

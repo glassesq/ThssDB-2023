@@ -6,8 +6,9 @@ public class Configuration {
 
   public String MetadataFilename = testPath + "/" + "example.json";
   public String WALFilename = testPath + "/" + "WAL.log";
+  public String DummyLogFilename = testPath + "/" + "DummyLog.log";
 
-  public int pageSize = 1 * 1024;
+  public int pageSize = 2 * 1024;
 
   public final int overallPageIndex = 0;
   public final int indexRootPageIndex = 2;
@@ -34,10 +35,13 @@ public class Configuration {
 
   public final int maxCharsetLength = 4;
 
+  public boolean useDummyLog = false;
+
   public Configuration() {
     allow_implicit_transaction = true;
     auto_commit = true;
     serializable = false;
+    useDummyLog = true;
 
     /* conflict test */
     // TODO: assert (!(allow_implicit_transaction && auto_commit));

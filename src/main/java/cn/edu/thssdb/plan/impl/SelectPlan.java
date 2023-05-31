@@ -17,6 +17,8 @@ import java.util.ArrayList;
 import static java.lang.Math.max;
 
 public class SelectPlan extends LogicalPlan {
+
+  public static int counter = 0;
   public boolean broken = false;
   public boolean useWhere, useJoin;
   public ArrayList<String> tableNames;
@@ -156,6 +158,7 @@ public class SelectPlan extends LogicalPlan {
   }
 
   public QueryResult getEqual(Table.TableMetadata table) throws Exception {
+    //    System.out.println("select equal!!!!");
     IndexPage rootPage =
         (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
     ValueWrapper[] query = {queryValue};
@@ -175,7 +178,7 @@ public class SelectPlan extends LogicalPlan {
   }
 
   public QueryResult getCondition(Table.TableMetadata table) throws Exception {
-    //    System.out.println("getCondition");
+    //    System.out.println("select getCondition!!!!");
     IndexPage rootPage =
         (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
     Pair<Integer, ArrayList<RecordLogical>> pageIter = rootPage.getLeftmostDataPage(transactionId);
@@ -257,9 +260,11 @@ public class SelectPlan extends LogicalPlan {
     }
     Pair<Table.TableMetadata, ArrayList<RecordLogical>> page = pages.get(iter);
     ArrayList<RecordLogical> allRecordLogical = page.right;
+    String columnName = null;
+    if (useWhere) columnName = L_where.tableName().getText();
     for (RecordLogical record : allRecordLogical) {
       if (useWhere)
-        if (L_where.tableName().getText().equals(page.left.name)) {
+        if (columnName.equals(page.left.name)) {
           //          System.out.println(L_where.getText());
           ValueWrapper recordValue = getRecordValue(record, queryCol.primary);
           //          System.out.println(recordValue.toString() + cmp_where.getText() +
@@ -334,7 +339,8 @@ public class SelectPlan extends LogicalPlan {
       throws Exception {
     this.transactionId = transactionId;
     initialization(tables);
-    //    System.out.println("initialization finished.");
+    counter++;
+    //    System.out.println("SELECT GET RESULT!" + counter);
     if (!useJoin) {
       if (!useWhere) {
         return getCondition(tables.get(0));

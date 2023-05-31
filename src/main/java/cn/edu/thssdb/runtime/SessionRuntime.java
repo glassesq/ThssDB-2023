@@ -7,6 +7,7 @@ import cn.edu.thssdb.query.QueryResult;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import cn.edu.thssdb.schema.Database;
 import cn.edu.thssdb.schema.Table;
+import cn.edu.thssdb.storage.writeahead.DummyLog;
 import cn.edu.thssdb.utils.Global;
 import cn.edu.thssdb.utils.StatusUtil;
 
@@ -38,77 +39,35 @@ public class SessionRuntime {
    * @param plan the plan to be executed.
    * @return executeStatementResponse
    */
-  public ExecuteStatementResp runPlan(LogicalPlan plan) {
+  public ExecuteStatementResp runPlan(LogicalPlan plan, String statement) {
     try {
-      //      System.out.println("SOMEBODY CALL RUN PLAN!!!!!!!!!!!!!");
-      //      System.out.println("SESSION IS " + sessionId);
-
-      /* Transaction Free Statement. */
-      System.out.println("\nHELLP!!!!\n");
-      System.out.println("session: " + sessionId + " transaction: " + transactionId + " " + plan);
-      System.out.println("\nHELLP!!!!\n");
       switch (plan.getType()) {
         case BEGIN_TRANSACTION:
-          System.out.println("let us begin transaction!!!!!");
-          System.out.println("current transaction is " + transactionId);
+          usingBeginTransaction = true;
           if (transactionId < 0) {
-            usingBeginTransaction = true;
             transactionId = ServerRuntime.newTransaction();
-            IO.writeTransactionStart(transactionId);
-            System.out.println(
-                "session: "
-                    + sessionId
-                    + " transaction: "
-                    + transactionId
-                    + " "
-                    + plan); // For Test
+            IO.writeTransactionStart(sessionId, transactionId);
             return new ExecuteStatementResp(
                 StatusUtil.success("You are now in transaction " + transactionId), false);
           } else {
-
-            System.out.println("well.....");
             IO.pushTransactionCommit(transactionId);
-            // release all locks
             ServerRuntime.releaseAllLocks(transactionId);
             transactionId = -1;
-            System.out.println("commit because of duplicating begin transaction.");
-            usingBeginTransaction = true;
             transactionId = ServerRuntime.newTransaction();
-            IO.writeTransactionStart(transactionId);
-            System.out.println(
-                "session: "
-                    + sessionId
-                    + " transaction: "
-                    + transactionId
-                    + " "
-                    + plan); // For Test
-
+            IO.writeTransactionStart(sessionId, transactionId);
             return new ExecuteStatementResp(
                 StatusUtil.success("There is already an active transaction now."), false);
           }
         case USE_DATABASE:
-          // TODO: require LOCK
           UseDatabasePlan useDatabasePlan = (UseDatabasePlan) plan;
           if (ServerRuntime.databaseNameLookup.containsKey(useDatabasePlan.getDatabaseName())) {
             databaseId = ServerRuntime.databaseNameLookup.get(useDatabasePlan.getDatabaseName());
-            System.out.println(
-                "session: "
-                    + sessionId
-                    + " transaction: "
-                    + transactionId
-                    + " "
-                    + plan); // For Test
+            DummyLog.writeDummyLog(
+                transactionId, "switch to database " + useDatabasePlan.getDatabaseName());
             return new ExecuteStatementResp(
                 StatusUtil.success("switch to database " + useDatabasePlan.getDatabaseName()),
                 false);
           } else {
-            System.out.println(
-                "[FAILED] session: "
-                    + sessionId
-                    + " transaction: "
-                    + transactionId
-                    + " "
-                    + plan); // For Test
             return new ExecuteStatementResp(
                 StatusUtil.fail("cannot find database " + useDatabasePlan.getDatabaseName()),
                 false);
@@ -116,12 +75,13 @@ public class SessionRuntime {
         default:
       }
 
+      IO.writeDummyStatementLog(transactionId, statement);
       /* Transaction Needed Statement. */
       if (transactionId < 0 && ServerRuntime.config.allow_implicit_transaction) {
         // automatically begin the transaction if allow_implicit_transaction is on.
         usingBeginTransaction = false;
         transactionId = ServerRuntime.newTransaction();
-        IO.writeTransactionStart(transactionId);
+        IO.writeTransactionStart(sessionId, transactionId);
       } else if (transactionId < 0) {
         return new ExecuteStatementResp(
             StatusUtil.fail(
@@ -129,21 +89,12 @@ public class SessionRuntime {
             false);
       }
       ExecuteStatementResp response = null;
-      //      System.out.println("HELLO????????????");
-      System.out.println(
-          "session: " + sessionId + " transaction: " + transactionId + " " + plan); // For Test
       switch (plan.getType()) {
         case COMMIT:
-          System.out.println("explicit commit!!!!!!!!!!!! " + transactionId);
           IO.pushTransactionCommit(transactionId);
           // release all locks
           ServerRuntime.releaseAllLocks(transactionId);
           transactionId = -1;
-          // Commit statement shall be treated as the end of transaction. No matter it succeeds or
-          // not.
-          // TODO: If commit failed, the transaction shall enter its abort process.
-          // see also at the end of the function
-
           return new ExecuteStatementResp(
               StatusUtil.success("The transaction has been successfully committed."), false);
         case CREATE_DATABASE:
@@ -176,10 +127,10 @@ public class SessionRuntime {
       }
 
       if (response != null) {
+        if (response.status.getCode() == Global.SUCCESS_CODE && !response.hasResult)
+          IO.writeDummyStatementLog(transactionId, statement);
         if (!usingBeginTransaction && ServerRuntime.config.auto_commit) {
-          System.out.println(" ************ commit for " + transactionId);
           IO.pushTransactionCommit(transactionId);
-          // release all locks
           ServerRuntime.releaseAllLocks(transactionId);
           transactionId = -1;
           response.status.msg =
@@ -193,7 +144,7 @@ public class SessionRuntime {
           ServerRuntime.databaseMetadata.get(databaseId);
       if (currentDatabaseMetadata == null) {
         // TODO: roll back
-        System.out.println("CANNOT FIND DATABASE " + transactionId);
+        //        System.out.println("CANNOT FIND DATABASE " + transactionId);
         IO.pushTransactionCommit(transactionId);
         ServerRuntime.releaseAllLocks(transactionId);
         transactionId = -1;
@@ -245,7 +196,6 @@ public class SessionRuntime {
                     StatusUtil.fail("Table " + insertPlan.tableName + " not found."), false);
             break;
           }
-          //          System.out.println(transactionId + " START INSERT!");
           ArrayList<ArrayList<String>> results = insertPlan.getValues(table);
           boolean insertResult = true;
           int index;
@@ -253,7 +203,6 @@ public class SessionRuntime {
             insertResult = table.insertRecord(transactionId, results.get(index));
             if (!insertResult) break;
           }
-          //          System.out.println(transactionId + " RESPONSE CREATED!");
           if (insertResult) {
             response = new ExecuteStatementResp(StatusUtil.success("Insertion succeeded."), false);
           } else {
@@ -269,23 +218,14 @@ public class SessionRuntime {
           }
           ArrayList<Table.TableMetadata> tables = new ArrayList<>();
           for (String tableName : selectPlan.tableNames) {
-            //                        System.out.println(tableName);
-            //            System.out.println(currentDatabaseMetadata.getTableByName(tableName));
             tables.add(currentDatabaseMetadata.getTableByName(tableName));
           }
-          //          System.out.println("SELECT starting");
           QueryResult result = selectPlan.getResult(transactionId, tables);
-          //          System.out.println("SELECT finished");
           response =
               new ExecuteStatementResp(StatusUtil.success("Select operation completed"), true);
           response.setColumnsList(result.columns);
           for (ArrayList<String> row : result.rows) {
             response.addToRowList(row);
-            int i = 0;
-            for (String e : row) {
-              //              System.out.println(result.columns.get(i) + e);
-              ++i;
-            }
           }
           break;
         case DELETE:
@@ -302,9 +242,7 @@ public class SessionRuntime {
                     StatusUtil.fail("Table " + deletePlan.tableName + " not found."), false);
             break;
           }
-          //          System.out.println("DELETE starting");
           deletePlan.doDelete(transactionId, metadata);
-          //          System.out.println("DELETE finished");
           response =
               new ExecuteStatementResp(StatusUtil.success("delete operation completed"), false);
           break;
@@ -322,9 +260,7 @@ public class SessionRuntime {
                     StatusUtil.fail("Table " + updatePlan.tableName + " not found."), false);
             break;
           }
-          //          System.out.println("UPDATE starting");
           boolean updateResult = updatePlan.doUpdate(transactionId, updateMetadata);
-          //          System.out.println("UPDATE finished");
           response =
               new ExecuteStatementResp(StatusUtil.success("update operation completed"), false);
           if (!updateResult)
@@ -337,14 +273,14 @@ public class SessionRuntime {
       }
 
       if (response != null) {
+        if (response.status.getCode() == Global.SUCCESS_CODE && !response.hasResult)
+          IO.writeDummyStatementLog(transactionId, statement);
         if (!usingBeginTransaction && ServerRuntime.config.auto_commit) {
           if (response.status.getCode() == Global.FAILURE_CODE) {
             response.status.msg =
                 " [WARNING!] The operation not succeed. But we 'commit' it for now.\n"
                     + response.status.msg;
           }
-          System.out.println(
-              " $$$$$$$$$$$$$$$ " + sessionId + " transaction: " + transactionId + " commit.");
           IO.pushTransactionCommit(transactionId);
           // This commit is only for test.
           // TODO: Suitable validation should be introduced.
@@ -368,10 +304,6 @@ public class SessionRuntime {
         response.status.msg =
             " [WARNING!] The operation not succeed. But we 'commit' it for now.\n"
                 + response.status.msg;
-        //        System.out.println(
-        //            " $$$$$$$$$$$$$$$ "
-        //                + sessionId + " transaction: " + transactionId + " commit. [FAIL BUT
-        // COMMIT!]");
         try {
           IO.pushTransactionCommit(transactionId);
         } catch (Exception shallNeverHappen) {

@@ -173,7 +173,7 @@ public class UpdatePlan extends LogicalPlan {
   public boolean updateWherePrimaryEqual() throws Exception {
     IndexPage rootPage =
         (IndexPage) IO.read(tableMetadata.spaceId, ServerRuntime.config.indexRootPageIndex);
-    System.out.println("update where primary equal!");
+    //    System.out.println("update where primary equal!");
     if (updateSingleAndOnlyPrimary) {
       ValueWrapper[] queryKey = {queryValue};
       if (queryValue.compareTo(valueToSet) == 0) {
@@ -196,12 +196,12 @@ public class UpdatePlan extends LogicalPlan {
         return true;
       }
     } else {
-      System.out.println("here we delete, no conflict!" + transactionId);
+      //      System.out.println("here we delete, no conflict!" + transactionId);
       ValueWrapper[] queryKey = {queryValue};
-      System.out.println("try delete." + transactionId);
+      //      System.out.println("try delete." + transactionId);
       RecordLogical recordDeleted =
           rootPage.scanTreeAndDeleteRecordWithKey(transactionId, queryKey);
-      System.out.println("delete ok." + transactionId);
+      //      System.out.println("delete ok." + transactionId);
       if (recordDeleted == null) {
         /* no such record */
         return true;
@@ -212,11 +212,11 @@ public class UpdatePlan extends LogicalPlan {
       } else {
         recordToInsert.nonPrimaryKeyValues[-columnToSet.primary - 1].setWithNull(valueLiteralToSet);
       }
-      System.out.println("try insert." + transactionId);
+      //      System.out.println("try insert." + transactionId);
       boolean insertResult = rootPage.insertDataRecordIntoTree(transactionId, recordToInsert);
-      System.out.println("insert ok." + transactionId);
+      //      System.out.println("insert ok." + transactionId);
       if (!insertResult) {
-        System.out.println("let us recover" + transactionId);
+        //        System.out.println("let us recover" + transactionId);
         rootPage.insertDataRecordIntoTree(transactionId, recordDeleted);
       } else {
         return true;
@@ -362,7 +362,7 @@ public class UpdatePlan extends LogicalPlan {
   public boolean doUpdate(long transactionId, Table.TableMetadata table) throws Exception {
     this.transactionId = transactionId;
     initialization(table);
-    System.out.println("update initialization finished.");
+    //    System.out.println("update initialization finished.");
 
     conflictingUpdate = columnToSet.primary >= 0;
     updateSingleAndOnlyPrimary = table.getPrimaryKeyNumber() == 1 && columnToSet.primary == 0;
