@@ -31,6 +31,10 @@ public class IndexPageTest {
     ServerRuntime.config.MetadataFilename = ServerRuntime.config.testPath + "/example.json";
     ServerRuntime.config.WALFilename = ServerRuntime.config.testPath + "/WAL.log";
     ServerRuntime.config.DummyLogFilename = ServerRuntime.config.testPath + "/dummy.log";
+    ServerRuntime.config.tablespacePath = ServerRuntime.config.testPath + "/" + "base";
+    ServerRuntime.config.testPathRecover = ServerRuntime.config.testPath + "/" + "checkpoint";
+    ServerRuntime.config.DummyLogRecoverFilename =
+        ServerRuntime.config.testPath + "/" + "DummyLogRecover.log";
 
     testDir = new File(ServerRuntime.config.testPath);
     try {
