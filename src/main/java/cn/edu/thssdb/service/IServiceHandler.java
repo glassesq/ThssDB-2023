@@ -13,11 +13,14 @@ import cn.edu.thssdb.rpc.thrift.GetTimeResp;
 import cn.edu.thssdb.rpc.thrift.IService;
 import cn.edu.thssdb.rpc.thrift.Status;
 import cn.edu.thssdb.runtime.ServerRuntime;
+import cn.edu.thssdb.storage.DiskBuffer;
 import cn.edu.thssdb.utils.Global;
 import cn.edu.thssdb.utils.StatusUtil;
 import org.apache.thrift.TException;
 
 import java.util.Date;
+
+import static java.lang.System.exit;
 
 public class IServiceHandler implements IService.Iface {
 
@@ -43,6 +46,16 @@ public class IServiceHandler implements IService.Iface {
 
   @Override
   public ExecuteStatementResp executeStatement(ExecuteStatementReq req) throws TException {
+    if (req.statement.equals("force quit")) {
+      DiskBuffer.buffer.invalidateAll();
+      try {
+        System.gc();
+        Thread.sleep(10000);
+      } catch (Exception ignored) {
+      }
+      exit(50);
+    }
+
     if (!ServerRuntime.checkForSession(req.getSessionId())) {
       return new ExecuteStatementResp(
           StatusUtil.fail("You are not connected. Please connect first."), false);

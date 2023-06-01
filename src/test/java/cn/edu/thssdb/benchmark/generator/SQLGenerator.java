@@ -47,7 +47,7 @@ public class SQLGenerator {
             + ") values ("
             + StringUtils.join(data, ",")
             + ");";
-    //    System.out.println(insertSQL);
+    System.out.println(insertSQL);
     return insertSQL;
   }
 
@@ -62,7 +62,7 @@ public class SQLGenerator {
     updateStatement.setString(1, column);
     updateStatement.setString(2, dataItem.toString());
     updateStatement.setString(3, String.valueOf(random.nextInt(rowNumber)));
-    //    System.out.println(updateStatement.getSQL());
+    System.out.println(updateStatement.getSQL());
     return updateStatement.getSQL();
   }
 
@@ -72,7 +72,7 @@ public class SQLGenerator {
     int rowNumber = rowNumberMap.get(tableSchema.tableName).getAndIncrement();
     deleteStatement.setString(0, tableSchema.tableName);
     deleteStatement.setString(1, String.valueOf(random.nextInt(rowNumber)));
-    //    System.out.println(deleteStatement.getSQL());
+    System.out.println(deleteStatement.getSQL());
     return deleteStatement.getSQL();
   }
 
@@ -85,7 +85,7 @@ public class SQLGenerator {
     queryStatement.setString(1, tableSchema.tableName);
     int rowNumber = rowNumberMap.get(tableSchema.tableName).getAndIncrement();
     queryStatement.setString(2, String.valueOf(random.nextInt(rowNumber)));
-    //    System.out.println(queryStatement.getSQL());
+    System.out.println(queryStatement.getSQL());
     return queryStatement.getSQL();
   }
 
@@ -107,7 +107,7 @@ public class SQLGenerator {
     joinStatement.setString(4, tableSchema2.tableName + ".id");
     joinStatement.setString(5, tableSchema1.tableName + ".id");
     joinStatement.setString(6, String.valueOf(random.nextInt(rowNumber)));
-    //    System.out.println(joinStatement.getSQL());
+    System.out.println(joinStatement.getSQL());
     return joinStatement.getSQL();
   }
 }

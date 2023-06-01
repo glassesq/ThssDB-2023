@@ -15,5 +15,5 @@ public class Constants {
     DataType.INT, DataType.LONG, DataType.FLOAT, DataType.DOUBLE, DataType.STRING
   };
   // 行数
-  public static final int rowCount = 200;
+  public static final int rowCount = 10;
 }

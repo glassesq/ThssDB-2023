@@ -30,8 +30,7 @@ public class Client {
   }
 
   public ExecuteStatementResp executeStatement(String sql) throws TException {
-    ExecuteStatementResp resp = client.executeStatement(new ExecuteStatementReq(sessionId, sql));
-    return resp;
+    return client.executeStatement(new ExecuteStatementReq(sessionId, sql));
   }
 
   public void close() {

@@ -58,6 +58,7 @@ public class PerformanceTestExecutor extends TestExecutor {
   public void test() throws TException {
     // create database and use database
     Client schemaClient = clients.get(0);
+    OperationGenerator operationGenerator = new OperationGenerator(dataGenerator, DATA_SEED);
     schemaClient.executeStatement("drop database db_performance;");
     // make sure database not exist, it's ok to ignore the error
     ExecuteStatementResp resp1 = schemaClient.executeStatement("create database db_performance;");
@@ -82,8 +83,6 @@ public class PerformanceTestExecutor extends TestExecutor {
           CompletableFuture.runAsync(
               () -> {
                 try {
-                  OperationGenerator operationGenerator =
-                      new OperationGenerator(dataGenerator, DATA_SEED);
                   LOGGER.info("Start Performance Test for Client-" + index);
                   Client client = clients.get(index);
                   PerformanceTestExecutor.Measurement measurement = measurements.get(index);

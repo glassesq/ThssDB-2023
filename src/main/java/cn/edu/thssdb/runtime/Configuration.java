@@ -8,7 +8,7 @@ public class Configuration {
   public String WALFilename = testPath + "/" + "WAL.log";
   public String DummyLogFilename = testPath + "/" + "DummyLog.log";
 
-  public int pageSize = 16 * 1024;
+  public int pageSize = 8 * 1024;
 
   public final int overallPageIndex = 0;
   public final int indexRootPageIndex = 2;

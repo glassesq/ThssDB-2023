@@ -1,11 +1,14 @@
 package cn.edu.thssdb.communication;
 
+import cn.edu.thssdb.runtime.ServerRuntime;
+import cn.edu.thssdb.schema.Database;
 import cn.edu.thssdb.schema.Table;
 import cn.edu.thssdb.storage.DiskBuffer;
 import cn.edu.thssdb.storage.page.Page;
 import cn.edu.thssdb.storage.writeahead.DummyLog;
 import cn.edu.thssdb.storage.writeahead.WriteLog;
 
+import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -162,6 +165,12 @@ public class IO {
       throws Exception {
     if (config.useDummyLog) {
       DummyLog.writeDummyLog(transactionId, "create database " + name + " with id " + databaseId);
+
+      Database.DatabaseMetadata.metaDataLatch.readLock().lock();
+      FileOutputStream metadataStream = new FileOutputStream(config.MetadataFilename);
+      metadataStream.write(ServerRuntime.metadataArray.toString().getBytes(StandardCharsets.UTF_8));
+      metadataStream.close();
+      Database.DatabaseMetadata.metaDataLatch.readLock().unlock();
     } else {
       WriteLog.addSpecialDatabaseLog(
           transactionId,
@@ -175,6 +184,11 @@ public class IO {
       throws Exception {
     if (config.useDummyLog) {
       DummyLog.writeDummyLog(transactionId, "drop database " + name + " with id" + databaseId);
+      Database.DatabaseMetadata.metaDataLatch.readLock().lock();
+      FileOutputStream metadataStream = new FileOutputStream(config.MetadataFilename);
+      metadataStream.write(ServerRuntime.metadataArray.toString().getBytes(StandardCharsets.UTF_8));
+      metadataStream.close();
+      Database.DatabaseMetadata.metaDataLatch.readLock().unlock();
     } else {
       WriteLog.addSpecialDatabaseLog(
           transactionId,
@@ -185,10 +199,15 @@ public class IO {
   }
 
   public static void writeCreateTable(
-      long transactionId, int databaseId, Table.TableMetadata metadata) {
+      long transactionId, int databaseId, Table.TableMetadata metadata) throws Exception {
     if (config.useDummyLog) {
       DummyLog.writeDummyLog(
           transactionId, "create table " + metadata.toString() + " in database " + databaseId);
+      Database.DatabaseMetadata.metaDataLatch.readLock().lock();
+      FileOutputStream metadataStream = new FileOutputStream(config.MetadataFilename);
+      metadataStream.write(ServerRuntime.metadataArray.toString().getBytes(StandardCharsets.UTF_8));
+      metadataStream.close();
+      Database.DatabaseMetadata.metaDataLatch.readLock().unlock();
     } else {
       WriteLog.addCreateTableLog(transactionId, databaseId, metadata);
     }

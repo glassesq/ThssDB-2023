@@ -12,7 +12,6 @@ import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 
 import static cn.edu.thssdb.runtime.ServerRuntime.persistPage;
@@ -21,16 +20,15 @@ import static java.lang.System.exit;
 
 public class DiskBuffer {
 
-  public static AtomicInteger testCounter = new AtomicInteger();
-
   public static class Thrower extends TimerTask {
     public void run() {
       //      System.out.println("start throw pages");
 
-//          System.gc();
-          System.out.println(persistPage.size() + " " + recoverArea.size());
-          System.out.println(Runtime.getRuntime().freeMemory());
-//      throwPages();
+      //          System.gc();
+      System.out.println(
+          persistPage.size() + " " + recoverArea.size() + " " + buffer.estimatedSize());
+      System.out.println(Runtime.getRuntime().freeMemory());
+      //      throwPages();
       //      System.out.println("start throw pages ok");
     }
   }
@@ -58,28 +56,17 @@ public class DiskBuffer {
     //    } catch (Exception e) {
     //      e.printStackTrace();
     //    }
-    // 获取当前正在运行的线程及其持有的锁
-    //    ThreadMXBean threadMXBean = ManagementFactory.getThreadMXBean();
-    //    long[] threadIds = threadMXBean.getAllThreadIds();
-    //    ThreadInfo[] threadInfos = threadMXBean.getThreadInfo(threadIds);
-
-    // 输出线程及其持有的锁
-    //    for (ThreadInfo threadInfo : threadInfos) {
-    //      System.out.println( threadInfo.getThreadName() + " " + threadInfo.getLockInfo() + " " +
-    // threadInfo.getThreadState() + " ");
-    //    }
-
+    System.gc();
     try {
-      int cnt = 0;
       Reference<?> ref;
       while (true) {
         ref = referenceQueue.poll();
         if (ref == null) {
           Thread.sleep(0, 10);
         } else {
-//          System.gc();
-//          System.out.println(persistPage.size() + " " + recoverArea.size());
-//          System.out.println(Runtime.getRuntime().freeMemory());
+          //          System.gc();
+          //          System.out.println(persistPage.size() + " " + recoverArea.size());
+          //          System.out.println(Runtime.getRuntime().freeMemory());
           Long key = throwSet.get(ref);
           throwSet.remove(ref);
           if (key == null) continue;
@@ -89,7 +76,9 @@ public class DiskBuffer {
           int pageId = key.intValue();
           //        System.out.println("suitelock:" + suite.suiteLock);
           //        System.out.println("suite counter:" + suite.counter + " " + pageId);
+          suite.suiteLock.lock();
           if (--suite.counter == 0) {
+            suite.suiteLock.unlock();
             //          System.out.println( "suite counter:" + suite.counter + " recover size:" +
             // recoverArea.size());
             try {
@@ -101,6 +90,8 @@ public class DiskBuffer {
             recoverArea.remove(key);
             //          System.out.println( "remove really! spaceId:" + (int) (key >> 32) + " " +
             // key.intValue() + " " + recoverArea.size());
+          } else {
+            suite.suiteLock.unlock();
           }
         }
       }
@@ -108,7 +99,6 @@ public class DiskBuffer {
       e.printStackTrace();
       exit(44);
     }
-//    System.out.println(Thread.currentThread() + " start throw page ok");
   }
 
   /**
@@ -117,7 +107,7 @@ public class DiskBuffer {
    */
   public static final LoadingCache<Long, Page> buffer =
       Caffeine.newBuilder()
-          .maximumSize(30)
+          .maximumSize(50)
           .removalListener(
               (Long key, Page page, RemovalCause cause) -> {
                 //                System.out.println("throw out removal listener:" +
@@ -129,7 +119,17 @@ public class DiskBuffer {
                 //                System.out.println("buffer lock:" + bufferLock);
                 //                System.out.println("get from buffer:" + key.intValue());
                 //                System.out.println("get from buffer:" + key.intValue());
-                if( Runtime.getRuntime().freeMemory() <= 2000000 ) Thread.sleep(0, 100);
+                if (Runtime.getRuntime().freeMemory() <= 4000000) {
+                  System.gc();
+                  int sleepTime = 50;
+                  Thread.sleep(0, sleepTime);
+                  while (Runtime.getRuntime().freeMemory() <= 4000000) {
+                    sleepTime = sleepTime * 2;
+                    if (sleepTime >= 999) break;
+                    ;
+                    Thread.sleep(0, sleepTime);
+                  }
+                }
                 int spaceId = (int) (key >> 32);
                 int pageId = key.intValue();
                 //                System.out.println("get from buffer:" + key.intValue());
@@ -143,7 +143,9 @@ public class DiskBuffer {
                   //                  suite.suiteLock.tryLock();
                   page = recover(spaceId, pageId, suite);
                   //                  System.out.println("recover counter: " + suite.counter);
+                  suite.suiteLock.lock();
                   if (++suite.counter == 1) recoverArea.put(key, suite);
+                  suite.suiteLock.unlock();
                   //                  suite.suiteLock.unlock();
                 }
                 throwSet.put(new PhantomReference<>(page, referenceQueue), key);
