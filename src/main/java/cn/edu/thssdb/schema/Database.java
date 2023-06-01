@@ -49,10 +49,8 @@ public class Database {
      *
      * @param transactionId transactionId
      * @param tableMetadata tableMetadata
-     * @throws Exception WAL error
      */
-    public void createTable(long transactionId, Table.TableMetadata tableMetadata)
-        throws Exception {
+    public void createTable(long transactionId, Table.TableMetadata tableMetadata) {
       metaDataLatch.writeLock().lock();
       try {
         tables.put(tableMetadata.spaceId, tableMetadata);
@@ -75,8 +73,7 @@ public class Database {
      * @return A Database Object
      * @throws Exception WAL error
      */
-    public static DatabaseMetadata createDatabase(long transactionId, String name)
-        throws Exception {
+    public static DatabaseMetadata createDatabase(long transactionId, String name) {
       metaDataLatch.writeLock().lock();
       DatabaseMetadata metadata = new DatabaseMetadata();
       try {
@@ -99,7 +96,7 @@ public class Database {
       return metadata;
     }
 
-    public static boolean dropDatabase(long transactionId, String name) throws Exception {
+    public static boolean dropDatabase(long transactionId, String name) {
       Integer databaseId = ServerRuntime.databaseNameLookup.get(name);
       if (databaseId == null) {
         /* database not exists. */

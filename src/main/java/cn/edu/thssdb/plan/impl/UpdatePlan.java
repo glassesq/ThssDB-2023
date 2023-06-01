@@ -47,7 +47,7 @@ public class UpdatePlan extends LogicalPlan {
       if (table == null)
         throw new IllegalArgumentException(
             "Table " + L_where.tableName().getText() + " not found.");
-      if (table.columnNames.get(keyName) == null)
+      if (table.getColumnDetailByName(keyName) == null)
         throw new IllegalArgumentException(
             "Column '" + keyName + "' not found in table '" + table.name + "'");
 

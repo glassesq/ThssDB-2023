@@ -49,7 +49,7 @@ public class SelectPlan extends LogicalPlan {
       for (Table.TableMetadata table : tables) {
         if (tables.size() == 1 || table.name.equals(column.tableName().getText())) {
           String keyName = column.columnName().getText();
-          if (table.columnNames.get(keyName) == null)
+          if (table.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + table.name + "'");
           colInTable.add(table.getColumnDetailByName(keyName));
@@ -67,7 +67,7 @@ public class SelectPlan extends LogicalPlan {
       if (useJoin) {
         if (t.name.equals(L_on.tableName().getText())) {
           String keyName = L_on.columnName().getText();
-          if (t.columnNames.get(keyName) == null)
+          if (table.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + t.name + "'");
           L_index = i;
@@ -75,7 +75,7 @@ public class SelectPlan extends LogicalPlan {
         }
         if (t.name.equals(R_on.tableName().getText())) {
           String keyName = R_on.columnName().getText();
-          if (t.columnNames.get(keyName) == null)
+          if (table.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + t.name + "'");
           R_index = i;
@@ -91,7 +91,7 @@ public class SelectPlan extends LogicalPlan {
     if (table == null)
       throw new IllegalArgumentException(
           "Table " + L_where.tableName().getText() + " not found in FROM clause.");
-    if (table.columnNames.get(keyName) == null)
+    if (table.getColumnDetailByName(keyName) == null)
       throw new IllegalArgumentException(
           "Column '" + keyName + "' not found in table '" + table.name + "'");
 

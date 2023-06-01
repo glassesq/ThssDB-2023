@@ -30,25 +30,16 @@ public class Table {
     public String name;
     public String tablespaceFilename;
 
-    /** if the table is temporary (e.g. may be created for join operation. ) */
-    public boolean temporary = false;
-
-    /** if the table is inited (The relevant tablespace file is already in disk buffer or disk.) */
-    public boolean inited = false;
-
     /** column name to column primary field */
-    // TODO: change to private
-    public HashMap<String, Integer> columnNames = new HashMap<>();
+    private HashMap<String, Integer> columnNames = new HashMap<>();
 
     /** <b>Aligned</b> column primary field to column detail
      *  {@code [0, nonPrimaryKeyNumber)} stores column whose primary field ranges from -nonPrimaryKeyNumber to -1.
      *  {@code [nonPrimaryKeyNumber, primaryKeyNumber + nonPrimaryKeyNumber) stores column whose primary field ranges from 0 to primaryKeyNumber - 1.
      */
-    // TODO: change to private
-    public ArrayList<Column> columnDetails = new ArrayList<>();
+    private ArrayList<Column> columnDetails = new ArrayList<>();
 
     /** column creating order (in create table statement) to column primary field */
-    // TODO: change to private
     private ArrayList<Integer> columnCreatingOrder = new ArrayList<>();
 
     /** Json object of overall table metadata */
@@ -100,7 +91,7 @@ public class Table {
         int nonPrimaryKeyNumber) {
       this.primaryKeyNumber = primaryKeyNumber;
       this.nonPrimaryKeyNumber = nonPrimaryKeyNumber;
-      this.nullableKeyNumber = nonPrimaryKeyNumber; /* TODO */
+      this.nullableKeyNumber = nonPrimaryKeyNumber;
       for (int i = 0; i < primaryKeyNumber + nonPrimaryKeyNumber; i++) {
         columnDetails.add(null);
       }
@@ -155,7 +146,7 @@ public class Table {
     }
 
     /**
-     * get the length of nullBitmap for this table TODO: optimization
+     * get the length of nullBitmap for this table
      *
      * @return number of bytes
      */
@@ -219,8 +210,6 @@ public class Table {
       this.object.put("tablespaceId", spaceId);
       this.tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
       this.object.put("tablespaceFile", tablespaceFilename);
-      temporary = false; // TODO: temporary table.
-      inited = false;
     }
 
     public static TableMetadata parse(JSONObject object) throws Exception {
@@ -267,37 +256,36 @@ public class Table {
       }
 
       /* since the tableMetadata is formed according to an existed json object, it must be on disk. */
-      metadata.temporary = false;
-      metadata.inited = true;
       return metadata;
     }
 
     /**
      * init this tablespace on disk (buffer). Set up file format and necessary information. Both
      * Metadata and Tablespace Data. A suitable tablespaceId will be allocated automatically.
-     *
-     * @throws Exception init failed.
      */
-    public void initTablespaceFile(long transactionId) throws Exception {
+    public void initTablespaceFile(long transactionId) {
       /* Tablespace File Creation */
       String tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
       //      System.out.println(tablespaceFilename);
 
       File tablespaceFile = new File(tablespaceFilename);
-      // TODO: delete file if already existed.
-      tablespaceFile.createNewFile();
-      if (!tablespaceFile.exists()) {
-        throw new Exception("create tablespace file failed.");
+      if (tablespaceFile.exists()) {
+        tablespaceFile.delete();
+      }
+      try {
+        tablespaceFile.createNewFile();
+        if (!tablespaceFile.exists()) {
+          throw new Exception("create tablespace file failed.");
+        }
+      } catch (Exception e) {
+        e.printStackTrace();
+        exit(64);
       }
 
-      OverallPage.createOverallPage(transactionId, spaceId, 0);
-      //      System.out.println("overall page over.");
-      IndexPage indexPage = IndexPage.createIndexPage(transactionId, spaceId, 2);
-      //      System.out.println("index root page over.");
-      IndexPage leftmostPage =
-          IndexPage.createIndexPage(
-              transactionId, spaceId, ServerRuntime.config.indexLeftmostLeafIndex);
-      //      System.out.println("left most data page over.");
+      OverallPage.createOverallPage(transactionId, spaceId, ServerRuntime.config.overallPageIndex);
+      IndexPage.createIndexPage(transactionId, spaceId, ServerRuntime.config.indexRootPageIndex);
+      IndexPage.createIndexPage(
+          transactionId, spaceId, ServerRuntime.config.indexLeftmostLeafIndex);
     }
 
     /**
@@ -306,66 +294,42 @@ public class Table {
      * @param transactionId transaction
      * @param values value (in the format of ('string', 1234, null)), in the order of (primaryKeys,
      *     nonPrimaryKeys).
-     * @throws Exception the primary key is existed.
      */
-    public boolean insertRecord(long transactionId, ArrayList<String> values) throws Exception {
+    public boolean insertRecord(long transactionId, ArrayList<String> values) {
       RecordLogical recordToBeInserted = new RecordLogical(this);
 
       int primaryKeyNumber = getPrimaryKeyNumber();
       int nonPrimaryKeyNumber = getNonPrimaryKeyNumber();
 
       for (int i = 0; i < primaryKeyNumber; i++) {
-        ValueWrapper valueWrapper = new ValueWrapper(getColumnDetailByOrderInType(i, true));
+        Column column = getColumnDetailByOrderInType(i, true);
+        if (values.get(primaryKeyNumber + i).equals("null") && column.isNotNull()) return false;
+        ValueWrapper valueWrapper = new ValueWrapper(column);
         valueWrapper.setWithNull(values.get(i));
         recordToBeInserted.primaryKeyValues[i] = valueWrapper;
       }
 
       for (int i = 0; i < nonPrimaryKeyNumber; i++) {
-        ValueWrapper valueWrapper = new ValueWrapper(getColumnDetailByOrderInType(i, false));
+        Column column = getColumnDetailByOrderInType(i, false);
+        if (values.get(primaryKeyNumber + i).equals("null") && column.isNotNull()) return false;
+        ValueWrapper valueWrapper = new ValueWrapper(column);
         valueWrapper.setWithNull(values.get(primaryKeyNumber + i));
         recordToBeInserted.nonPrimaryKeyValues[i] = valueWrapper;
       }
 
-      // TODO: validation (check for constraint)
-
-      /* B-LINK TREE */
-      IndexPage rootPage =
-          (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexRootPageIndex);
-
-      boolean result = rootPage.insertDataRecordIntoTree(transactionId, recordToBeInserted);
-      return result;
-
-      //      Pair<Integer, ArrayList<RecordLogical>> records =
-      // rootPage.getLeftmostDataPage(transactionId);
-      //      System.out.println("******************* values currently in rootPage:");
-      //      System.out.println("******************* next Page is:" + records.left);
-      //      for (RecordLogical recordLogical : records.right) {
-      //        System.out.println(recordLogical);
-      //      }
-      //      System.out.println("**************************************************");
+      IndexPage rootPage;
+      try {
+        rootPage = (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexRootPageIndex);
+        return rootPage.insertDataRecordIntoTree(transactionId, recordToBeInserted);
+      } catch (Exception e) {
+        e.printStackTrace();
+        exit(65);
+      }
+      return false;
     }
-  }
-
-  public TableMetadata metadata;
-
-  private void recover() {
-    // TODO
   }
 
   public void delete() {
     // TODO
-  }
-
-  public void update() {
-    // TODO
-  }
-
-  private void serialize() {
-    // TODO
-  }
-
-  private ArrayList<RecordLogical> deserialize() {
-    // TODO
-    return null;
   }
 }

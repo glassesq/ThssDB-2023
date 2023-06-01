@@ -32,7 +32,7 @@ For default configurations using JSON, relevant JSONObject and JSONArray shall b
 - [ ] 实现表的创建、删除；
 - [x] 实现数据库的创建、删除、切换；
 - [x] 实现表和数据库的元数据（有哪些数据库，数据库里有哪些表，每个表的结构如何）的持久化。
-- [ ] 重启数据库时从持久化的元数据中恢复系统信息。
+- [x] 重启数据库时从持久化的元数据中恢复系统信息。
 
 ###### SQL
 
@@ -83,7 +83,7 @@ Schema Package:
 
 #### 基础要求
 
-- [ ] 实现数据记录的持久化（补充说明：后续测试过程中是内存受限场景，无法全部存储在内存中）。
+- [x] 实现数据记录的持久化（补充说明：后续测试过程中是内存受限场景，无法全部存储在内存中）。
 - [x] 实现对记录的增加、删除、修改。
 - [x] 支持五种数据类型：Int，Long，Float，Double，String。
 - [x] 实现存储管理模块后，ThssDB应当能够支持下列SQL语句（不区分大小写）：
@@ -160,12 +160,12 @@ SELECT tableName1.AttrName1, tableName1.AttrName2…, tableName2.AttrName1, tabl
 
 #### 基础要求
 
-- [ ] 实现begin transaction和commit；
+- [x] 实现begin transaction和commit；
 - [ ] 采用普通锁协议，实现read committed，serializable的隔离级别；
 
 #### 进阶要求
 
-- [ ] 实现2PL或MVCC协议。
+- [x] 实现2PL或MVCC协议。
 
 ### Recovery
 
@@ -196,7 +196,7 @@ The disk buffer and WAL package shall not be called directly at any time.
 
 #### 基础要求
 
-- [ ] 实现单一事务的WAL机制，要求实现写log和读log，在重启时能够恢复记录的数据即可。
+- [x] 实现单一事务的WAL机制，要求实现写log和读log，在重启时能够恢复记录的数据即可。
 
 #### 进阶要求
 

@@ -33,7 +33,8 @@ public class ThssDB {
     processor = new IService.Processor(handler);
     /* setup server runtime */
     try {
-      ServerRuntime.setup();
+      if (ServerRuntime.config.recoverFromDummyLog) ServerRuntime.recoverFromDummyLog();
+      else ServerRuntime.setup();
     } catch (Exception e) {
       System.out.println("The server cannot start for some unexpected errors." + e.getMessage());
       return;

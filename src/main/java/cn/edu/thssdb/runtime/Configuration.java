@@ -2,18 +2,21 @@ package cn.edu.thssdb.runtime;
 
 public class Configuration {
 
+  public final int warningMemory = 4 * 1024 * 1024;
   public String testPath = "/Users/rongyi/Desktop/metadata";
 
-  public String MetadataFilename = testPath + "/" + "example.json";
+  public String tablespacePath = testPath + "/" + "base";
+  public String testPathRecover = testPath + "/" + "checkpoint";
   public String WALFilename = testPath + "/" + "WAL.log";
   public String DummyLogFilename = testPath + "/" + "DummyLog.log";
-
-  public int pageSize = 8 * 1024;
+  public String DummyLogRecoverFilename = testPath + "/" + "DummyLogRecover.log";
+  public String MetadataFilename = tablespacePath + "/" + "example.json";
+  public int pageSize = 16 * 1024;
+  public final int bufferSize = 30;
 
   public final int overallPageIndex = 0;
-  public final int indexRootPageIndex = 2;
-
-  public final int indexLeftmostLeafIndex = 3;
+  public final int indexRootPageIndex = 1;
+  public final int indexLeftmostLeafIndex = 2;
 
   /**
    * When {@code allow_implicit_transaction} is set to false, any statement without an explicit
@@ -35,16 +38,15 @@ public class Configuration {
 
   public final int maxCharsetLength = 4;
 
-  public boolean useDummyLog = false;
+  public boolean useDummyLog;
+
+  public boolean recoverFromDummyLog;
 
   public Configuration() {
     allow_implicit_transaction = true;
     auto_commit = true;
     serializable = false;
     useDummyLog = true;
-
-    /* conflict test */
-    // TODO: assert (!(allow_implicit_transaction && auto_commit));
-    /* auto_commit cannot be used when implicit_transaction is allowed */
+    recoverFromDummyLog = false;
   }
 }

@@ -157,7 +157,7 @@ public class IndexPageTest {
     recordsInRoot.sort((a, b) -> ValueWrapper.compareArray(a.primaryKeyValues, b.primaryKeyValues));
 
     transactionId = ServerRuntime.newTransaction();
-    rootPage.splitRoot(transactionId, false);
+    rootPage.splitRoot(transactionId);
     ServerRuntime.releaseAllLocks(transactionId);
 
     IndexPage testPage;
@@ -303,7 +303,7 @@ public class IndexPageTest {
           rootPage.scanInternal(transactionId, recordInPage.primaryKeyValues);
       if (insertPos.left) continue;
 
-      if (rootPage.freespaceStart
+      if (rootPage.freespaceStart.get()
               + tableMetadata.getMaxRecordLength(IndexPage.RecordInPage.USER_DATA_RECORD)
           >= ServerRuntime.config.pageSize - 10) {
         break;

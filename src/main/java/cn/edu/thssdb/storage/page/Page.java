@@ -10,6 +10,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class Page {
   public SharedSuite makeSuite() {
     SharedSuite suite = new SharedSuite();
+    suite.freespaceStart = this.freespaceStart;
     suite.bLinkTreeLatch = this.bLinkTreeLatch;
     suite.bytes = this.bytes;
     suite.infimumRecord = this.infimumRecord;
@@ -21,6 +22,7 @@ public class Page {
     return suite;
   }
 
+  public AtomicInteger freespaceStart = new AtomicInteger();
   public ReentrantReadWriteLock pageReadAndWriteLatch = new ReentrantReadWriteLock();
   public ReentrantLock pageWriteAndOutputLatch = new ReentrantLock();
 

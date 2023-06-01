@@ -32,7 +32,7 @@ public class DeletePlan extends LogicalPlan {
       if (table == null)
         throw new IllegalArgumentException(
             "Table " + L_where.tableName().getText() + " not found in FROM clause.");
-      if (table.columnNames.get(keyName) == null)
+      if (table.getColumnDetailByName(keyName) == null)
         throw new IllegalArgumentException(
             "Column '" + keyName + "' not found in table '" + table.name + "'");
 
@@ -134,14 +134,9 @@ public class DeletePlan extends LogicalPlan {
   }
 
   public void doDelete(long transactionId, Table.TableMetadata table) throws Exception {
+    // TODO: exception handle
     this.transactionId = transactionId;
     initialization(table);
-    //    System.out.println("initialization finished.");
-    //    System.out.println(L_where.columnName().getText());
-    //    System.out.println(table.getPrimaryKeyList().get(0));
-    //    System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    //    System.out.println(table.object);
-    //    System.out.println("!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     if (!useWhere) {
       deleteCondition(table);
     } else {

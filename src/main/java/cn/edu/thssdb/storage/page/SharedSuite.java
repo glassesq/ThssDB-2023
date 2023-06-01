@@ -18,6 +18,8 @@ public class SharedSuite {
 
   public int counter;
 
+  public AtomicInteger freespaceStart = new AtomicInteger();
+
   public ReentrantLock suiteLock = new ReentrantLock();
 
   public AtomicInteger maxPageId = null;

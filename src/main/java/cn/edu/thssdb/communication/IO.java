@@ -15,6 +15,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static cn.edu.thssdb.runtime.ServerRuntime.config;
 import static cn.edu.thssdb.storage.writeahead.WriteLog.*;
+import static java.lang.System.exit;
 
 public class IO {
   static HashSet<Long> dirtyPages = new HashSet<>();
@@ -28,8 +29,13 @@ public class IO {
    * @param pageId pageId
    * @return not parsed Page
    */
-  public static Page read(int spaceId, int pageId) throws Exception {
-    return DiskBuffer.read(spaceId, pageId);
+  public static Page read(int spaceId, int pageId) {
+    try {
+      return DiskBuffer.read(spaceId, pageId);
+    } catch (Exception e) {
+      exit(66);
+    }
+    return null;
   }
 
   /**
@@ -149,7 +155,7 @@ public class IO {
     }
   }
 
-  public static void writeTransactionStart(long sessionId, long transactionId) throws Exception {
+  public static void writeTransactionStart(long sessionId, long transactionId) {
     if (config.useDummyLog) {
       DummyLog.writeDummyLog(transactionId, "transaction start for session " + sessionId + ".");
     } else {
@@ -218,19 +224,23 @@ public class IO {
    * implementation is unsafe, incorrect and has poor performance.
    *
    * @param transactionId transaction
-   * @throws Exception WAL Error
    */
-  public static void pushTransactionCommit(long transactionId) throws Exception {
-    if (config.useDummyLog) {
-      int stamp = DummyLog.writeDummyLog(transactionId, "transaction commit.");
-      if (DummyLog.checkCounter.get() < stamp)
+  public static void pushTransactionCommit(long transactionId) {
+    try {
+      if (config.useDummyLog) {
+        int stamp = DummyLog.writeDummyLog(transactionId, "transaction commit.");
+        if (DummyLog.checkCounter.get() < stamp)
+          pushWriteAheadLogOnly(/* TODO: transactionId (maybe not output all.) */ );
+      } else {
+        WriteLog.addSpecialLog(transactionId, WriteLog.COMMIT_LOG);
         pushWriteAheadLogOnly(/* TODO: transactionId (maybe not output all.) */ );
-    } else {
-      WriteLog.addSpecialLog(transactionId, WriteLog.COMMIT_LOG);
-      pushWriteAheadLogOnly(/* TODO: transactionId (maybe not output all.) */ );
+      }
+      /* FOR TEST ONLY */
+      pushAndWriteCheckpoint();
+    } catch (Exception e) {
+      e.printStackTrace();
+      exit(63);
     }
-    /* FOR TEST ONLY */
-    pushAndWriteCheckpoint();
   }
 
   /**

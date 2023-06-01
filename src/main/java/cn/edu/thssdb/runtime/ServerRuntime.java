@@ -1,5 +1,6 @@
 package cn.edu.thssdb.runtime;
 
+import cn.edu.thssdb.plan.LogicalGenerator;
 import cn.edu.thssdb.plan.LogicalPlan;
 import cn.edu.thssdb.rpc.thrift.ExecuteStatementResp;
 import cn.edu.thssdb.schema.Database;
@@ -8,7 +9,10 @@ import cn.edu.thssdb.storage.DiskBuffer;
 import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.storage.page.Page;
 import cn.edu.thssdb.storage.writeahead.DummyLog;
+import cn.edu.thssdb.utils.Pair;
 import cn.edu.thssdb.utils.StatusUtil;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.io.LineIterator;
 import org.json.JSONArray;
 
 import java.io.*;
@@ -25,6 +29,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * class.
  */
 public class ServerRuntime {
+
+  //  public static ConcurrentHashMap<Long, IndexPage.RecordInPage> father = new
+  // ConcurrentHashMap<>();
 
   /** An array shadow of all metadata. */
   public static JSONArray metadataArray;
@@ -68,7 +75,7 @@ public class ServerRuntime {
   }
 
   /**
-   * transaction get a write lock
+   * transaction get a write-lock
    *
    * @param transactionId transaction id
    * @param lock lock
@@ -77,13 +84,9 @@ public class ServerRuntime {
       long transactionId, ReentrantReadWriteLock lock, IndexPage tracePage) {
     // TODO: save pages because of soft referenced cache.
     if (lock == null) return;
-    if (!persistPage.containsKey(transactionId)) persistPage.put(transactionId, new HashSet<>());
+    persistPage.putIfAbsent(transactionId, new HashSet<>());
     persistPage.get(transactionId).add(tracePage);
-    //    IO.writeDummyStatementLog( transactionId, Thread.currentThread() + " get write lock of" +
-    // tracePage.pageId + " " + lock + " " + lock.writeLock());
-    //    System.out.println(transactionId + " get write lock for page " + tracePage.pageId);
     getTwoPhaseLock(transactionId, lock.writeLock());
-    //    System.out.println(transactionId + " get write lock for page succeed" + tracePage.pageId);
   }
 
   /**
@@ -95,18 +98,13 @@ public class ServerRuntime {
   public static void getReadLock(
       long transactionId, ReentrantReadWriteLock lock, IndexPage tracePage) {
     if (lock == null) return;
-    //    System.out.println(transactionId + " get read lock");
     if (config.serializable) {
       if (!persistPage.containsKey(transactionId)) persistPage.put(transactionId, new HashSet<>());
       persistPage.get(transactionId).add(tracePage);
       getTwoPhaseLock(transactionId, lock.readLock());
     } else {
-      //      System.out.println(transactionId + " get read lock for page " + tracePage.pageId);
-      if (!persistPage.containsKey(transactionId)) persistPage.put(transactionId, new HashSet<>());
-      persistPage.get(transactionId).add(tracePage);
+      // TODO: deadlock check
       lock.readLock().lock();
-      //      System.out.println(transactionId + " get read lock for page succeed" +
-      // tracePage.pageId);
     }
   }
 
@@ -128,19 +126,12 @@ public class ServerRuntime {
    * @param transactionId transaction id
    */
   public static void releaseAllLocks(long transactionId) {
-    //    System.out.println(transactionId + " release all locks " +
-    // locks.get(transactionId).size());
     if (locks.get(transactionId) == null) return;
-    for (Lock lock : locks.get(transactionId)) {
-      lock.unlock();
-      //      System.out.println(transactionId + " release lock " + lock);
-    }
+    ArrayList<Lock> lockToRelease = locks.get(transactionId);
     locks.remove(transactionId);
-
-    HashSet<Page> pages = persistPage.get(transactionId);
-    if (pages == null) return;
-    //    System.out.println("throw " + pages.size() + "pages");
-    pages.clear();
+    for (Lock lock : lockToRelease) {
+      lock.unlock();
+    }
     persistPage.remove(transactionId);
   }
 
@@ -211,7 +202,6 @@ public class ServerRuntime {
   public static void closeSession(long sessionId) {
     SessionRuntime sessionRuntime = sessions.get(sessionId);
     if (sessionRuntime != null) sessionRuntime.stop();
-
     sessions.remove(sessionId);
   }
 
@@ -235,7 +225,7 @@ public class ServerRuntime {
   public static String getTablespaceFile(int spaceId) {
     // TODO: read from metadata.
     // TODO: REPLACE FOR TEST
-    return ServerRuntime.config.testPath + "/tablespace" + spaceId + ".tablespace";
+    return ServerRuntime.config.tablespacePath + "/tablespace" + spaceId + ".tablespace";
   }
 
   /**
@@ -255,21 +245,55 @@ public class ServerRuntime {
                   + ". Uncommitted actions shall be automatically aborted. Please connect to the server again."),
           false);
     }
-    ExecuteStatementResp response = sessionRuntime.runPlan(plan, statement);
-    //    System.out.println("SESSION ID: " + sessionId + " THREAD: " +
-    // Thread.currentThread().getId());
-    //    System.out.println( sessionRuntime.sessionId + " END ITS RUN
-    // PLAN!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-    return response;
+    return sessionRuntime.runPlan(plan, statement);
+  }
+
+  /**
+   * recover from an empty database according to the DummyLog
+   *
+   * @throws Exception IO error
+   */
+  public static void recoverFromDummyLog() throws Exception {
+    File sourceFile = new File(ServerRuntime.config.DummyLogFilename);
+    File targetFile = new File(ServerRuntime.config.DummyLogRecoverFilename);
+    FileUtils.copyFile(sourceFile, targetFile);
+    sourceFile.delete();
+    File metadataFile = new File(config.MetadataFilename);
+    metadataFile.delete();
+
+    setup();
+
+    targetFile = new File(ServerRuntime.config.DummyLogRecoverFilename);
+
+    Pair<Long, String> operation;
+    LineIterator iterator = FileUtils.lineIterator(targetFile, "UTF-8");
+    String message;
+    while (true) {
+      if (iterator.hasNext()) {
+        message = iterator.nextLine();
+        System.out.println(message);
+      } else break;
+      if (message == null) break;
+      operation = DummyLog.getStatementFromLog(message);
+      if (operation == null) continue;
+      while (sessionCounter.get() < operation.left) {
+        newSession();
+      }
+      LogicalPlan plan = LogicalGenerator.generate(operation.right);
+      ServerRuntime.runPlan(operation.left, plan, operation.right);
+    }
   }
 
   /**
    * setup the server. The lock is <b>not</b> required right now. It is under start-up process.
-   * Multiple transactions are impossible. TODO: recover mechanism.
+   * Multiple transactions are impossible.
    *
    * @throws Exception create WALFile failed.
    */
   public static void setup() throws Exception {
+    File testDir = new File(ServerRuntime.config.tablespacePath);
+    testDir.mkdirs();
+
     if (config.useDummyLog) {
       File DummyFile = new File(config.DummyLogFilename);
       DummyFile.createNewFile();
@@ -281,9 +305,28 @@ public class ServerRuntime {
       if (!WALFile.exists()) throw new Exception("We cannot create WAL file.");
     }
 
+    /* memory monitor, can be commented for real use */
     Timer timer = new Timer();
-    timer.schedule(new DiskBuffer.Thrower(), 0, 100);
-    new Thread(() -> DiskBuffer.throwPages()).start();
+    timer.schedule(new DiskBuffer.MemoryMonitor(), 0, 2000);
+    /* Throw pages out of memory. */
+    new Thread(DiskBuffer::throwPages).start();
+    /* Checkpoint maker */
+    new Thread(
+            () -> {
+              while (true) {
+                long lastTransaction = transactionCounter.get();
+                try {
+                  /* TODO: busy waiting */
+                  Thread.sleep(1000);
+                } catch (Exception ignored) {
+                }
+                if (lastTransaction == transactionCounter.get()) {
+                  DiskBuffer.buffer.invalidateAll();
+                  System.gc();
+                }
+              }
+            })
+        .start();
 
     File metadataFile = new File(config.MetadataFilename);
     if (!metadataFile.exists()) {
@@ -312,18 +355,6 @@ public class ServerRuntime {
             tablespaceCounter.set(m.tables.get(k).spaceId);
         }
       }
-      /* FOR TEST */
-      /*System.out.println("Metadata Load Successful from " + config.MetadataFilename);
-      for (Integer k : databaseMetadata.keySet()) {
-        System.out.println(
-            "database "
-                + databaseMetadata.get(k).databaseId
-                + " : "
-                + databaseMetadata.get(k).name
-                + " with "
-                + databaseMetadata.get(k).tables.size()
-                + " tables");
-      } */
     }
   }
 }

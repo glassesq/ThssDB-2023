@@ -2,17 +2,19 @@ package cn.edu.thssdb.storage;
 
 import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.storage.page.*;
+import cn.edu.thssdb.storage.writeahead.DummyLog;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.benmanes.caffeine.cache.LoadingCache;
-import com.github.benmanes.caffeine.cache.RemovalCause;
+import org.apache.commons.io.FileUtils;
 
+import java.io.File;
 import java.io.RandomAccessFile;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static cn.edu.thssdb.runtime.ServerRuntime.persistPage;
 import static cn.edu.thssdb.storage.page.Page.*;
@@ -20,67 +22,44 @@ import static java.lang.System.exit;
 
 public class DiskBuffer {
 
-  public static class Thrower extends TimerTask {
+  public static class MemoryMonitor extends TimerTask {
     public void run() {
-      //      System.out.println("start throw pages");
-
-      //          System.gc();
       System.out.println(
           persistPage.size() + " " + recoverArea.size() + " " + buffer.estimatedSize());
       System.out.println(Runtime.getRuntime().freeMemory());
-      //      throwPages();
-      //      System.out.println("start throw pages ok");
     }
   }
 
+  public static int blockingFactor = 1;
+  /** reference queue of page object that are removed by GC. */
   public static final ReferenceQueue<Page> referenceQueue = new ReferenceQueue<>();
-  public static final ReentrantLock bufferLock = new ReentrantLock();
+  /** ConcurrentHashMap from concat(spaceId, pageId) to share suite. */
   public static final ConcurrentHashMap<Long, SharedSuite> recoverArea = new ConcurrentHashMap<>();
+  /** ConcurrentHashMap from weak reference to concat(spaceId, pageId) */
   public static final ConcurrentHashMap<PhantomReference<Page>, Long> throwSet =
       new ConcurrentHashMap<>();
 
-  public static void throwPages() {
-    //    System.out.println(buffer.estimatedSize() + " " + recoverArea.size());
-    //    System.out.println(Thread.currentThread() + " start throw page");
+  public static long lastCheckpointVersion = -1;
 
-    //    try {
-    //      for (Long key : persistPage.keySet()) {
-    //        HashSet<Page> set = persistPage.get(key);
-    //        if (set == null) continue;
-    //        for (Page p : set) {
-    //          System.out.println(p.pageReadAndWriteLatch.readLock());
-    //          System.out.println(p.pageReadAndWriteLatch.writeLock());
-    //          System.out.println("key :" + key + " " + p.pageId + " " + p.pageReadAndWriteLatch);
-    //        }
-    //      }
-    //    } catch (Exception e) {
-    //      e.printStackTrace();
-    //    }
-    System.gc();
+  /** throw out pages to disk and remove them from memory */
+  public static void throwPages() {
     try {
       Reference<?> ref;
       while (true) {
         ref = referenceQueue.poll();
         if (ref == null) {
+          /* There are no weak reference in the poll. */
+          //          System.gc();
           Thread.sleep(0, 10);
         } else {
-          //          System.gc();
-          //          System.out.println(persistPage.size() + " " + recoverArea.size());
-          //          System.out.println(Runtime.getRuntime().freeMemory());
           Long key = throwSet.get(ref);
           throwSet.remove(ref);
           if (key == null) continue;
           SharedSuite suite = recoverArea.get(key);
           if (suite == null) continue;
-          int spaceId = (int) (key >> 32);
-          int pageId = key.intValue();
-          //        System.out.println("suitelock:" + suite.suiteLock);
-          //        System.out.println("suite counter:" + suite.counter + " " + pageId);
           suite.suiteLock.lock();
           if (--suite.counter == 0) {
             suite.suiteLock.unlock();
-            //          System.out.println( "suite counter:" + suite.counter + " recover size:" +
-            // recoverArea.size());
             try {
               DiskBuffer.output(key, suite);
             } catch (Exception e) {
@@ -88,8 +67,20 @@ public class DiskBuffer {
               exit(45);
             }
             recoverArea.remove(key);
-            //          System.out.println( "remove really! spaceId:" + (int) (key >> 32) + " " +
-            // key.intValue() + " " + recoverArea.size());
+            if (DiskBuffer.recoverArea.size() == 0) {
+              /*
+               * Checkpoint can be written safely. This is because pages are flushed to disk only by
+               * this thread. Any new modifications on data and write logs are held until this
+               * method finished.
+               */
+              lastCheckpointVersion++;
+              File srcDirectory = new File(ServerRuntime.config.tablespacePath);
+              File dstDirectory =
+                  new File(ServerRuntime.config.testPathRecover + lastCheckpointVersion);
+              FileUtils.copyDirectory(srcDirectory, dstDirectory);
+              DummyLog.writeDummyLog(-2, "checkpoint" + lastCheckpointVersion);
+              DummyLog.outputDummyLogToDisk();
+            }
           } else {
             suite.suiteLock.unlock();
           }
@@ -107,49 +98,47 @@ public class DiskBuffer {
    */
   public static final LoadingCache<Long, Page> buffer =
       Caffeine.newBuilder()
-          .maximumSize(50)
-          .removalListener(
-              (Long key, Page page, RemovalCause cause) -> {
-                //                System.out.println("throw out removal listener:" +
-                // key.intValue());
-                //                throwPages();
-              })
+          .maximumSize(ServerRuntime.config.bufferSize)
           .build(
               key -> {
-                //                System.out.println("buffer lock:" + bufferLock);
-                //                System.out.println("get from buffer:" + key.intValue());
-                //                System.out.println("get from buffer:" + key.intValue());
-                if (Runtime.getRuntime().freeMemory() <= 4000000) {
+                if (Runtime.getRuntime().freeMemory() <= ServerRuntime.config.warningMemory) {
+                  // TODO: refactor.
+                  // better thread sleep control for memory limitation.
+                  // replace busy waiting with something faster
                   System.gc();
-                  int sleepTime = 50;
+                  blockingFactor = blockingFactor << 1;
+                  int sleepTime = blockingFactor * 5;
                   Thread.sleep(0, sleepTime);
-                  while (Runtime.getRuntime().freeMemory() <= 4000000) {
-                    sleepTime = sleepTime * 2;
-                    if (sleepTime >= 999) break;
-                    ;
-                    Thread.sleep(0, sleepTime);
+                  while (Runtime.getRuntime().freeMemory() <= ServerRuntime.config.warningMemory) {
+                    if (sleepTime / 1000 > 50) {
+                      if (ThreadLocalRandom.current().nextFloat() < 0.3) break;
+                    } else {
+                      sleepTime = sleepTime * 2;
+                    }
+                    System.out.println("sleep!");
+                    Thread.sleep(sleepTime / 1000, sleepTime % 1000);
+                    System.gc();
                   }
+                  blockingFactor >>= 1;
                 }
-                int spaceId = (int) (key >> 32);
-                int pageId = key.intValue();
-                //                System.out.println("get from buffer:" + key.intValue());
-                SharedSuite suite = recoverArea.get(key);
-                //                System.out.println("get from buffer:" + key.intValue());
                 Page page;
+                SharedSuite suite = recoverArea.get(key);
                 if (suite == null) {
-                  page = input(spaceId, pageId);
+                  /* no shared suite currently stores in memory */
+                  page = input(key);
                   recoverArea.put(key, page.makeSuite());
                 } else {
-                  //                  suite.suiteLock.tryLock();
-                  page = recover(spaceId, pageId, suite);
-                  //                  System.out.println("recover counter: " + suite.counter);
+                  /* The corresponding share suite currently stores in memory, therefore we recover from the shared suite. */
+                  page = recover(suite);
                   suite.suiteLock.lock();
-                  if (++suite.counter == 1) recoverArea.put(key, suite);
+                  if (++suite.counter == 1) {
+                    /* optimistic locking:
+                    the shared suite has been removed asynchronously from memory just after we retrieve it from recoverArea. */
+                    recoverArea.put(key, suite);
+                  }
                   suite.suiteLock.unlock();
-                  //                  suite.suiteLock.unlock();
                 }
                 throwSet.put(new PhantomReference<>(page, referenceQueue), key);
-                //                System.out.println("get from buffer:" + key.intValue());
                 return page;
               });
 
@@ -175,8 +164,7 @@ public class DiskBuffer {
    * @return hashmap value
    */
   public static Page getFromBuffer(long key) {
-    Page page = buffer.get(key);
-    return page;
+    return buffer.get(key);
   }
 
   /**
@@ -193,11 +181,12 @@ public class DiskBuffer {
   /**
    * read a page from disk to buffer.
    *
-   * @param spaceId spaceId
-   * @param pageId pageId
+   * @param key concat(spaceId, pageId)
    * @throws Exception if the reading process fails.
    */
-  public static Page input(int spaceId, int pageId) throws Exception {
+  public static Page input(Long key) throws Exception {
+    int spaceId = (int) (key >> 32);
+    int pageId = key.intValue();
     String tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
     RandomAccessFile tablespaceFile = new RandomAccessFile(tablespaceFilename, "r");
     byte[] pageBytes = new byte[(int) ServerRuntime.config.pageSize];
@@ -207,95 +196,59 @@ public class DiskBuffer {
       throw new Exception(
           "read page error. Wrong length" + bytes + "input:" + spaceId + " " + pageId);
     }
-
     int pageType = ((int) pageBytes[12] << 8) | pageBytes[13];
     Page page;
     switch (pageType) {
       case OVERALL_PAGE:
         page = new OverallPage(pageBytes);
-        System.out.println(
-            "input newly from page and page is "
-                + page.spaceId
-                + " with atomic:"
-                + page.maxPageId.get());
         break;
       case INDEX_PAGE:
         page = new IndexPage(pageBytes, false);
         break;
-      case DATA_PAGE:
-        page = new DataPage(pageBytes);
-        break;
       default:
         page = new Page(pageBytes);
     }
-
     tablespaceFile.close();
     return page;
   }
 
-  public static Page recover(int spaceId, int pageId, SharedSuite sharedSuite) throws Exception {
-    //    System.out.println("recover!" + spaceId + " " + pageId);
+  /**
+   * recover a page from sharedSuite in {@code recoverArea}.
+   *
+   * @param sharedSuite shared suite
+   * @return recovered page
+   */
+  public static Page recover(SharedSuite sharedSuite) {
     byte[] pageBytes = sharedSuite.bytes;
-    //    System.out.println( "step 1 recover!" + spaceId + " " + pageId + " " +
-    // buffer.estimatedSize() + " " + recoverArea.size());
     int pageType = ((int) pageBytes[12] << 8) | pageBytes[13];
-    //    System.out.println("step 2 recover!" + spaceId + " " + pageId);
     Page page;
     switch (pageType) {
       case OVERALL_PAGE:
-        OverallPage opage = new OverallPage(pageBytes);
-        //        opage.setup();
-        page = opage;
-        page.maxPageId = sharedSuite.maxPageId;
-        //        System.out.println( "recover from page and page is " + page.spaceId + " with
-        // atomic:" + page.maxPageId.get());
+        page = new OverallPage(pageBytes);
         break;
       case INDEX_PAGE:
-        //        System.out.println("index page make.");
         page = new IndexPage(pageBytes, true);
-        //        System.out.println("index page make ok.");
-        break;
-      case DATA_PAGE:
-        page = new DataPage(pageBytes);
         break;
       default:
         page = new Page(pageBytes);
     }
-    //    System.out.println("copy suite!");
     page.pageReadAndWriteLatch = sharedSuite.pageReadAndWriteLatch;
     page.pageWriteAndOutputLatch = sharedSuite.pageWriteAndOutputLatch;
     page.firstSplitLock = sharedSuite.firstSplitLatch;
     page.bLinkTreeLatch = sharedSuite.bLinkTreeLatch;
     page.infimumRecord = sharedSuite.infimumRecord;
     page.maxPageId = sharedSuite.maxPageId;
-    //    System.out.println("copy suite end!");
+    page.freespaceStart = sharedSuite.freespaceStart;
     return page;
   }
 
   /**
-   * write a page from buffer to disk.
+   * Output a shared suite to disk.
    *
-   * @param spaceId spaceId
-   * @param pageId pageId
-   * @throws Exception if writing fails.
+   * @param key concat(spaceId, pageId)
+   * @param suite shared suite
+   * @throws Exception IO error
    */
-  public static void output(int spaceId, int pageId) throws Exception {
-    Page page = getFromBuffer(concat(spaceId, pageId));
-
-    /* avoid writing and outputting page simultaneously */
-    /* already locked in pushAndWriteCheckpoint */
-
-    String tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
-    RandomAccessFile tablespaceFile = new RandomAccessFile(tablespaceFilename, "rw");
-    byte[] pageBytes = page.bytes;
-    tablespaceFile.seek(ServerRuntime.config.pageSize * ((long) 0x00000000FFFFFFFF & pageId));
-    tablespaceFile.write(pageBytes, 0, ServerRuntime.config.pageSize);
-    tablespaceFile.close();
-
-    /* avoid writing and outputting page simultaneously */
-    page.pageWriteAndOutputLatch.unlock();
-  }
-
   public static void output(Long key, SharedSuite suite) throws Exception {
     int spaceId = (int) (key >> 32);
     int pageId = key.intValue();
@@ -303,17 +256,6 @@ public class DiskBuffer {
     RandomAccessFile tablespaceFile = new RandomAccessFile(tablespaceFilename, "rw");
     tablespaceFile.seek(ServerRuntime.config.pageSize * ((long) 0x00000000FFFFFFFF & pageId));
     tablespaceFile.write(suite.bytes, 0, ServerRuntime.config.pageSize);
-    tablespaceFile.close();
-  }
-
-  public static void output(Page page) throws Exception {
-    /* avoid writing and outputting page simultaneously */
-    /* already locked in pushAndWriteCheckpoint */
-    String tablespaceFilename = ServerRuntime.getTablespaceFile(page.spaceId);
-    RandomAccessFile tablespaceFile = new RandomAccessFile(tablespaceFilename, "rw");
-    byte[] pageBytes = page.bytes;
-    tablespaceFile.seek(ServerRuntime.config.pageSize * ((long) 0x00000000FFFFFFFF & page.pageId));
-    tablespaceFile.write(pageBytes, 0, ServerRuntime.config.pageSize);
     tablespaceFile.close();
   }
 }
