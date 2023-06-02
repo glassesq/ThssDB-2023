@@ -33,6 +33,7 @@ public class IO {
     try {
       return DiskBuffer.read(spaceId, pageId);
     } catch (Exception e) {
+      e.printStackTrace();
       exit(66);
     }
     return null;

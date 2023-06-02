@@ -927,6 +927,8 @@ public class IndexPage extends Page {
     previousPointerRecord.write(transactionId, this, previousPointerRecord.myOffset);
 
     //    ServerRuntime.father.put(concat(this.spaceId, childPageToPoint),
+    //    System.out.println("set " + this.pageId + " as father of " + childPageToPoint);
+    //    printStructrue(this);
     // pointerRecordToBeInserted);
   }
 
@@ -1016,6 +1018,8 @@ public class IndexPage extends Page {
 
     //    ServerRuntime.father.put(concat(this.spaceId, leftPageId), leftPointerRecord);
     //    ServerRuntime.father.put(concat(this.spaceId, rightPageId), rightPointerRecord);
+    //    System.out.println("set " + this.pageId + " as father of " + leftPageId);
+    //    System.out.println("set " + this.pageId + " as father of " + rightPageId);
 
     leftPage.writeAll(transactionId);
     rightPage.writeAll(transactionId);
@@ -1122,6 +1126,11 @@ public class IndexPage extends Page {
 
     int maxLength = metadata.getMaxRecordLength(RecordInPage.USER_POINTER_RECORD);
     IndexPage maybeParent = ancestors.pop();
+
+    //    System.out.println("first split myself" + pageId);
+    //    printStructrue(this);
+    //    System.out.println("----------------------------------");
+
     if (!maybeParent.moveRightAndInsertPointer(
         transactionId,
         ancestors,
@@ -1149,7 +1158,7 @@ public class IndexPage extends Page {
    * @param recordInPage Array List of records
    * @return supreme record at the time
    */
-  private RecordInPage getRecordInPageAndReturnSupreme(ArrayList<RecordInPage> recordInPage) {
+  public RecordInPage getRecordInPageAndReturnSupreme(ArrayList<RecordInPage> recordInPage) {
     RecordInPage record = this.infimumRecord;
     while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
       if (record != infimumRecord) recordInPage.add(record);
@@ -1440,7 +1449,8 @@ public class IndexPage extends Page {
       previousRecord = record;
       record = record.nextRecordInPage;
     }
-    if (record.nextAbsoluteOffset == 0) {
+    if (record.nextAbsoluteOffset == 0 || record.isRightest()) {
+
       return new Pair<>(false, previousRecord);
     } else {
       return new Pair<>(false, record);
@@ -1765,5 +1775,36 @@ public class IndexPage extends Page {
     bLinkTreeLatch.unlock();
 
     return record.nextAbsoluteOffset;
+  }
+
+  /** print b link tree structrue */
+  public static void printStructrue(IndexPage page) {
+    RecordInPage record = page.infimumRecord.nextRecordInPage;
+    if (record.recordType == RecordInPage.USER_DATA_RECORD) {
+      System.out.println(page.pageId + ":" + "data");
+      while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+        if (record.nextAbsoluteOffset != record.nextRecordInPage.myOffset) {
+          exit(80);
+        }
+        record = record.nextRecordInPage;
+      }
+      if (record.isRightest())
+        System.out.println(page.pageId + "->" + record.nextAbsoluteOffset + " next level");
+      else System.out.println(page.pageId + "->" + record.nextAbsoluteOffset + " same level");
+      return;
+    }
+
+    while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
+      System.out.println(page.pageId + "->" + record.childPageId);
+      IndexPage son = (IndexPage) IO.read(page.spaceId, record.childPageId);
+      printStructrue(son);
+      if (record.nextAbsoluteOffset != record.nextRecordInPage.myOffset) {
+        exit(81);
+      }
+      record = record.nextRecordInPage;
+    }
+    if (record.isRightest())
+      System.out.println(page.pageId + "->" + record.nextAbsoluteOffset + " next level");
+    else System.out.println(page.pageId + "->" + record.nextAbsoluteOffset + " same level");
   }
 }

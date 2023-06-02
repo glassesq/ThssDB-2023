@@ -14,7 +14,6 @@ import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ThreadLocalRandom;
 
 import static cn.edu.thssdb.runtime.ServerRuntime.persistPage;
 import static cn.edu.thssdb.storage.page.Page.*;
@@ -58,8 +57,9 @@ public class DiskBuffer {
           SharedSuite suite = recoverArea.get(key);
           if (suite == null) continue;
           suite.suiteLock.lock();
+          //          System.out.println("suite count of " + key.intValue() + " is " +
+          // suite.counter);
           if (--suite.counter == 0) {
-            suite.suiteLock.unlock();
             try {
               DiskBuffer.output(key, suite);
             } catch (Exception e) {
@@ -67,6 +67,7 @@ public class DiskBuffer {
               exit(45);
             }
             recoverArea.remove(key);
+            suite.suiteLock.unlock();
             if (DiskBuffer.recoverArea.size() == 0) {
               /*
                * Checkpoint can be written safely. This is because pages are flushed to disk only by
@@ -99,8 +100,15 @@ public class DiskBuffer {
   public static final LoadingCache<Long, Page> buffer =
       Caffeine.newBuilder()
           .maximumSize(ServerRuntime.config.bufferSize)
+          .removalListener(
+              (Long key, Page value, com.github.benmanes.caffeine.cache.RemovalCause cause) -> {
+                //                int spaceId = (int) (key >> 32);
+                //                int pageId = key.intValue();
+                //                System.out.println("output " + spaceId + " " + pageId);
+              })
           .build(
               key -> {
+                /*
                 if (Runtime.getRuntime().freeMemory() <= ServerRuntime.config.warningMemory) {
                   // TODO: refactor.
                   // better thread sleep control for memory limitation.
@@ -120,17 +128,25 @@ public class DiskBuffer {
                     System.gc();
                   }
                   blockingFactor >>= 1;
-                }
+                } */
                 Page page;
                 SharedSuite suite = recoverArea.get(key);
                 if (suite == null) {
                   /* no shared suite currently stores in memory */
                   page = input(key);
+                  int spaceId = (int) (key >> 32);
+                  int pageId = key.intValue();
+                  //                  System.out.println("input " + spaceId + " " + pageId);
                   recoverArea.put(key, page.makeSuite());
                 } else {
                   /* The corresponding share suite currently stores in memory, therefore we recover from the shared suite. */
+                  int spaceId = (int) (key >> 32);
+                  int pageId = key.intValue();
+                  //                  System.out.println("recover " + spaceId + " " + pageId);
                   page = recover(suite);
                   suite.suiteLock.lock();
+                  //                  System.out.println("[recover] suite count of " +
+                  // key.intValue() + " is " + suite.counter);
                   if (++suite.counter == 1) {
                     /* optimistic locking:
                     the shared suite has been removed asynchronously from memory just after we retrieve it from recoverArea. */
@@ -174,6 +190,7 @@ public class DiskBuffer {
    */
   public static void putToBuffer(Page page) {
     recoverArea.put(concat(page.spaceId, page.pageId), page.makeSuite());
+    //    System.out.println("first pin " + page.spaceId + " " + page.pageId);
     throwSet.put(new PhantomReference<>(page, referenceQueue), concat(page.spaceId, page.pageId));
     buffer.put(concat(page.spaceId, page.pageId), page);
   }
@@ -209,6 +226,7 @@ public class DiskBuffer {
         page = new Page(pageBytes);
     }
     tablespaceFile.close();
+
     return page;
   }
 
@@ -239,6 +257,7 @@ public class DiskBuffer {
     page.infimumRecord = sharedSuite.infimumRecord;
     page.maxPageId = sharedSuite.maxPageId;
     page.freespaceStart = sharedSuite.freespaceStart;
+
     return page;
   }
 

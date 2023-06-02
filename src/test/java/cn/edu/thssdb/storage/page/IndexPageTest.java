@@ -27,7 +27,7 @@ public class IndexPageTest {
   public void setup() throws Exception {
     System.out.println("maximum memory: " + Runtime.getRuntime().maxMemory());
     System.out.println(" ##### START TEST");
-    ServerRuntime.config.testPath = "./testOnly";
+    ServerRuntime.config.testPath = "/Users/rongyi/Desktop/metadata";
     ServerRuntime.config.MetadataFilename = ServerRuntime.config.testPath + "/example.json";
     ServerRuntime.config.WALFilename = ServerRuntime.config.testPath + "/WAL.log";
     ServerRuntime.config.DummyLogFilename = ServerRuntime.config.testPath + "/dummy.log";
@@ -56,11 +56,10 @@ public class IndexPageTest {
   @After
   public void cleanup() {
     System.out.println("\n ##### END TEST");
-    try {
-      FileUtils.deleteDirectory(testDir);
-    } catch (Exception ignore) {
-    }
-
+    //    try {
+    //      FileUtils.deleteDirectory(testDir);
+    //    } catch (Exception ignore) {
+    //    }
     System.out.println("END TEST : metadata clean up \n\n");
   }
 
@@ -78,15 +77,16 @@ public class IndexPageTest {
     ArrayList<Column> columns = new ArrayList<>();
     ArrayList<String> names = new ArrayList<>();
     ArrayList<Integer> orders = new ArrayList<>();
-    int primaryKeyNumber = 10;
-    int nonPrimaryKeyNumber = 10;
+    int primaryKeyNumber = 5;
+    int nonPrimaryKeyNumber = 5;
+
     for (int i = 0; i < primaryKeyNumber + nonPrimaryKeyNumber; i++) {
       Column column = new Column();
       String columnName = "column" + String.valueOf(i - nonPrimaryKeyNumber);
       column.prepare(
           columnName,
           types[ThreadLocalRandom.current().nextInt(types.length)],
-          ThreadLocalRandom.current().nextInt(20) + 1);
+          ThreadLocalRandom.current().nextInt(5) + 1);
       column.setPrimaryKey(i - nonPrimaryKeyNumber);
       names.add(columnName);
       columns.add(column);
@@ -110,7 +110,13 @@ public class IndexPageTest {
 
     ArrayList<RecordLogical> recordsInRoot = new ArrayList<>();
 
-    for (int time = 0; time < 2048; time++) {
+    //    BufferedWriter writer = new BufferedWriter(new
+    // FileWriter("/Users/rongyi/Desktop/metadata/wrong.txt", true));
+    //    dummyLogOutputLock.unlock();
+
+    //    File targetFile = new File("/Users/rongyi/Desktop/wrong2.txt");
+    //    LineIterator iterator = FileUtils.lineIterator(targetFile, "UTF-8");
+    for (int time = 0; time < 10000; time++) {
       RecordLogical record = new RecordLogical(tableMetadata);
       for (int i = 0; i < record.primaryKeyValues.length; i++) {
         Pair<String, ValueWrapper> r =
@@ -129,23 +135,53 @@ public class IndexPageTest {
         record.nonPrimaryKeyValues[i] = r.right;
       }
 
+      //      if (iterator.hasNext()) record.primaryKeyValues[0].setWithNull(iterator.nextLine());
+      //      else break;
+
+      //            if( time % 2 == 0 )
+      // record.primaryKeyValues[0].setWithNull(String.valueOf(time));
+      //      else record.primaryKeyValues[0].setWithNull(String.valueOf(-time));
+
       IndexPage.RecordInPage recordInPage =
           IndexPage.makeRecordInPageFromLogical(record, tableMetadata);
 
-      transactionId = ServerRuntime.newTransaction();
-      Pair<Boolean, IndexPage.RecordInPage> insertPos =
-          rootPage.scanTreeAndReturnRecord(transactionId, recordInPage.primaryKeyValues);
-      ServerRuntime.releaseAllLocks(transactionId);
-      if (insertPos.left) continue;
+      //      transactionId = ServerRuntime.newTransaction();
+      //      Pair<Boolean, IndexPage.RecordInPage> insertPos =
+      // rootPage.scanTreeAndReturnRecord(transactionId, recordInPage.primaryKeyValues);
+      //      ServerRuntime.releaseAllLocks(transactionId);
+      //      if (insertPos.left) continue;
 
       transactionId = ServerRuntime.newTransaction();
-      rootPage.insertDataRecordIntoTree(transactionId, record);
+      //      writer.write(record.primaryKeyValues[0].toString() + "\n");
+      System.out.println(record);
+      System.out.println("record size:" + recordsInRoot.size());
+      boolean r = rootPage.insertDataRecordIntoTree(transactionId, record);
+      //      writer.flush();
+      System.out.println(r);
+      r = rootPage.insertDataRecordIntoTree(transactionId, record);
       ServerRuntime.releaseAllLocks(transactionId);
 
       recordsInRoot.add(record);
+
+      IndexPage testPage;
+      ArrayList<RecordLogical> recordsParseData = new ArrayList<>();
       transactionId = ServerRuntime.newTransaction();
       Pair<Integer, ArrayList<RecordLogical>> dataResult =
           rootPage.getLeftmostDataPage(transactionId);
+      System.out.println("leftmost data page: " + dataResult.left + " " + dataResult.right.size());
+      assertNotEquals(dataResult.left.intValue(), 0);
+      while (dataResult.left.intValue() != 0) {
+        testPage = (IndexPage) IO.read(tableMetadata.spaceId, dataResult.left);
+        dataResult = testPage.getAllRecordLogical(transactionId);
+        for (int i = 0; i < dataResult.right.size(); i++) {
+          recordsParseData.add(dataResult.right.get(i));
+          //        System.out.println(dataResult.right.get(i));
+        }
+      }
+      assertEquals(recordsParseData.size(), recordsInRoot.size());
+      ServerRuntime.releaseAllLocks(transactionId);
+
+      dataResult = rootPage.getLeftmostDataPage(transactionId);
       if (dataResult.left.intValue() == 0) {
         continue;
       }
@@ -153,7 +189,8 @@ public class IndexPageTest {
       assertNotEquals(dataResult.left.intValue(), 0);
 
       transactionId = ServerRuntime.newTransaction();
-      insertPos = rootPage.scanTreeAndReturnRecord(transactionId, record.primaryKeyValues);
+      Pair<Boolean, IndexPage.RecordInPage> insertPos =
+          rootPage.scanTreeAndReturnRecord(transactionId, record.primaryKeyValues);
       ServerRuntime.releaseAllLocks(transactionId);
 
       assertTrue(insertPos.left);
@@ -166,20 +203,20 @@ public class IndexPageTest {
 
     IndexPage testPage;
     ArrayList<RecordLogical> recordsParseData = new ArrayList<>();
-
     transactionId = ServerRuntime.newTransaction();
     Pair<Integer, ArrayList<RecordLogical>> dataResult =
         rootPage.getLeftmostDataPage(transactionId);
-
+    System.out.println("leftmost data page: " + dataResult.left + " " + dataResult.right.size());
     assertNotEquals(dataResult.left.intValue(), 0);
-
     while (dataResult.left.intValue() != 0) {
       testPage = (IndexPage) IO.read(tableMetadata.spaceId, dataResult.left);
       dataResult = testPage.getAllRecordLogical(transactionId);
       for (int i = 0; i < dataResult.right.size(); i++) {
         recordsParseData.add(dataResult.right.get(i));
+        //        System.out.println(dataResult.right.get(i));
       }
     }
+    assertEquals(recordsParseData.size(), recordsInRoot.size());
 
     ServerRuntime.releaseAllLocks(transactionId);
 

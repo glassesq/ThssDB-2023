@@ -11,7 +11,7 @@ public class Configuration {
   public String DummyLogFilename = testPath + "/" + "DummyLog.log";
   public String DummyLogRecoverFilename = testPath + "/" + "DummyLogRecover.log";
   public String MetadataFilename = tablespacePath + "/" + "example.json";
-  public int pageSize = 16 * 1024;
+  public int pageSize = 2 * 1024;
   public final int bufferSize = 30;
 
   public final int overallPageIndex = 0;

@@ -67,7 +67,7 @@ public class SelectPlan extends LogicalPlan {
       if (useJoin) {
         if (t.name.equals(L_on.tableName().getText())) {
           String keyName = L_on.columnName().getText();
-          if (table.getColumnDetailByName(keyName) == null)
+          if (t.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + t.name + "'");
           L_index = i;
@@ -75,7 +75,7 @@ public class SelectPlan extends LogicalPlan {
         }
         if (t.name.equals(R_on.tableName().getText())) {
           String keyName = R_on.columnName().getText();
-          if (table.getColumnDetailByName(keyName) == null)
+          if (t.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + t.name + "'");
           R_index = i;

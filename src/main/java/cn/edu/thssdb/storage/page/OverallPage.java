@@ -29,21 +29,22 @@ public class OverallPage extends Page {
     OverallPage overallPage = new OverallPage(new byte[ServerRuntime.config.pageSize]);
     overallPage.spaceId = spaceId;
     overallPage.pageId = pageId;
+    overallPage.maxPageId = new AtomicInteger();
     IO.traceNewPage(overallPage);
     overallPage.pageType = OVERALL_PAGE;
-    overallPage.setup();
+    overallPage.maxPageId.set(ServerRuntime.config.indexLeftmostLeafIndex);
     overallPage.writeFILHeader(transactionId);
     overallPage.writeTablespace(transactionId);
-    overallPage.maxPageId.set(ServerRuntime.config.indexLeftmostLeafIndex);
     return overallPage;
   }
 
   private void parseTablespace() {
-    if (maxPageId == null) maxPageId = new AtomicInteger();
+    if (maxPageId == null) {
+      //      exit(69);
+      maxPageId = new AtomicInteger();
+    }
     maxPageId.set(parseIntegerBig(32));
-    //    maxInitedPage = parseIntegerBig(32 + 8);
-    //    currentDataPage = parseIntegerBig(32 + 12);
-    flags = parseIntegerBig(32 + 16);
+    //    flags = parseIntegerBig(32 + 16);
     /* RESERVED FOR 52 bytes */
   }
 
@@ -84,13 +85,8 @@ public class OverallPage extends Page {
     //    System.out.println( "################################# allocate new page: try for " +
     // transactionId + " in space:" + spaceId);
     int allocatedPageId = maxPageId.incrementAndGet();
-    //    System.out.println("################################# allocate new page: " +
-    // allocatedPageId);
+    System.out.println("################################# allocate new page: " + allocatedPageId);
     writeTablespace(transactionId);
     return allocatedPageId;
-  }
-
-  public void setup() {
-    parseTablespace();
   }
 }
