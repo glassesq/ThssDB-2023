@@ -74,13 +74,19 @@ public class DiskBuffer {
                * this thread. Any new modifications on data and write logs are held until this
                * method finished.
                */
-              lastCheckpointVersion++;
-              File srcDirectory = new File(ServerRuntime.config.tablespacePath);
-              File dstDirectory =
-                  new File(ServerRuntime.config.testPathRecover + lastCheckpointVersion);
-              FileUtils.copyDirectory(srcDirectory, dstDirectory);
-              DummyLog.writeDummyLog(-2, "checkpoint" + lastCheckpointVersion);
-              DummyLog.outputDummyLogToDisk();
+              DummyLog.dummyLogOutputLock.lock();
+              if (DiskBuffer.recoverArea.size() != 0) {
+                DummyLog.dummyLogOutputLock.unlock();
+              } else {
+                lastCheckpointVersion++;
+                File srcDirectory = new File(ServerRuntime.config.tablespacePath);
+                File dstDirectory =
+                    new File(ServerRuntime.config.testPathRecover + lastCheckpointVersion);
+                FileUtils.copyDirectory(srcDirectory, dstDirectory);
+                DummyLog.writeDummyLog(-2, "checkpoint" + lastCheckpointVersion);
+                DummyLog.outputDummyLogToDisk();
+              }
+              DummyLog.dummyLogOutputLock.unlock();
             }
           } else {
             suite.suiteLock.unlock();
