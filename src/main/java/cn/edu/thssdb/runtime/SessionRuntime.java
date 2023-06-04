@@ -157,6 +157,24 @@ public class SessionRuntime {
         response =
             new ExecuteStatementResp(StatusUtil.success("Table " + name + " created."), false);
         break;
+      case DROP_TABLE:
+        DropTablePlan dropTablePlan = (DropTablePlan) plan;
+        if (dropTablePlan.broken) {
+          response = new ExecuteStatementResp(StatusUtil.fail("The statement is broken."), false);
+          break;
+        }
+        name = dropTablePlan.tableName;
+        if (currentDatabaseMetadata.getTableByName(name) == null) {
+          response =
+              new ExecuteStatementResp(StatusUtil.fail("Table " + name + " not existed."), false);
+          break;
+        }
+        currentDatabaseMetadata.dropTable(
+            transactionId, currentDatabaseMetadata.getTableByName(name));
+        response =
+            new ExecuteStatementResp(StatusUtil.success("Table " + name + " deleted."), false);
+        break;
+
       case SHOW_TABLE:
         ShowTablePlan showTablePlan = (ShowTablePlan) plan;
         Table.TableMetadata showTable =

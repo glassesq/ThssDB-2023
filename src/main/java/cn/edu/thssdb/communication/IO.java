@@ -220,6 +220,21 @@ public class IO {
     }
   }
 
+  public static void writeDropTable(
+      long transactionId, int databaseId, Table.TableMetadata metadata) throws Exception {
+    if (config.useDummyLog) {
+      DummyLog.writeDummyLog(
+          transactionId, "drop table " + metadata.toString() + " in database " + databaseId);
+      Database.DatabaseMetadata.metaDataLatch.readLock().lock();
+      FileOutputStream metadataStream = new FileOutputStream(config.MetadataFilename);
+      metadataStream.write(ServerRuntime.metadataArray.toString().getBytes(StandardCharsets.UTF_8));
+      metadataStream.close();
+      Database.DatabaseMetadata.metaDataLatch.readLock().unlock();
+    } else {
+      // WriteLog.addCreateTableLog(transactionId, databaseId, metadata);
+    }
+  }
+
   /**
    * transaction requests a commit TODO: this implementation is only for test. The current
    * implementation is unsafe, incorrect and has poor performance.

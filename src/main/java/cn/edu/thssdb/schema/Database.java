@@ -43,6 +43,32 @@ public class Database {
     }
 
     /**
+     * This method drop table, covering both data and metadata. Proper changes shall be done to WAL
+     * buffer as well. The lock is not required. Only the transaction requested this method can
+     * access tableMetadata now. It will not affect other tables.
+     *
+     * @param transactionId transactionId
+     * @param tableMetadata tableMetadata
+     */
+    public void dropTable(long transactionId, Table.TableMetadata tableMetadata) {
+      metaDataLatch.writeLock().lock();
+      try {
+        tables.remove(tableMetadata.spaceId);
+        for (int i = 0; i < object.getJSONArray("tables").length(); ++i) {
+          if (object.getJSONArray("tables").getJSONObject(i).equals(tableMetadata.object)) {
+            object.getJSONArray("tables").remove(i);
+            break;
+          }
+        }
+        IO.writeDropTable(transactionId, this.databaseId, tableMetadata);
+        ServerRuntime.tableMetadata.remove(tableMetadata.spaceId);
+      } catch (Exception shallNeverHappen) {
+        exit(4);
+      }
+      metaDataLatch.writeLock().unlock();
+    }
+
+    /**
      * This method create table, covering both data and metadata. Proper changes shall be done to
      * WAL buffer as well. The lock is not required. Only the transaction requested this method can
      * access tableMetadata now. It will not affect other tables.

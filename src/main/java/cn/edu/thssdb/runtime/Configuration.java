@@ -3,7 +3,7 @@ package cn.edu.thssdb.runtime;
 public class Configuration {
 
   public final int warningMemory = 4 * 1024 * 1024;
-  public String testPath = "/Users/rongyi/Desktop/metadata";
+  public String testPath = "D:\\项目\\tmp";
 
   public String tablespacePath = testPath + "/" + "base";
   public String testPathRecover = testPath + "/" + "checkpoint";

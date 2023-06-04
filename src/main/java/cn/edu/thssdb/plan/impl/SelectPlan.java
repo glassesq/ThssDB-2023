@@ -47,7 +47,7 @@ public class SelectPlan extends LogicalPlan {
       res.columns.add(column.getText());
       //      System.out.print(column.getText() + ',');
       for (Table.TableMetadata table : tables) {
-        if (tables.size() == 1 || table.name.equals(column.tableName().getText())) {
+        if (tables.size() == 1 || table.name.toLowerCase().equals(column.tableName().getText().toLowerCase())) {
           String keyName = column.columnName().getText();
           if (table.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
@@ -63,9 +63,9 @@ public class SelectPlan extends LogicalPlan {
     Table.TableMetadata table = !useJoin ? tables.get(0) : null;
     int i = 0;
     for (Table.TableMetadata t : tables) {
-      if (useWhere && useJoin && t.name.equals(L_where.tableName().getText())) table = t;
+      if (useWhere && useJoin && t.name.toLowerCase().equals(L_where.tableName().getText().toLowerCase())) table = t;
       if (useJoin) {
-        if (t.name.equals(L_on.tableName().getText())) {
+        if (t.name.toLowerCase().equals(L_on.tableName().getText().toLowerCase())) {
           String keyName = L_on.columnName().getText();
           if (t.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
@@ -73,7 +73,7 @@ public class SelectPlan extends LogicalPlan {
           L_index = i;
           L_queryCol = t.getColumnDetailByName(keyName);
         }
-        if (t.name.equals(R_on.tableName().getText())) {
+        if (t.name.toLowerCase().equals(R_on.tableName().getText().toLowerCase())) {
           String keyName = R_on.columnName().getText();
           if (t.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
@@ -249,7 +249,7 @@ public class SelectPlan extends LogicalPlan {
       int i = 0;
       for (SQLParser.ColumnFullNameContext column : columns) {
         for (Pair<Table.TableMetadata, RecordLogical> record : records)
-          if (record.left.name.equals(column.tableName().getText())) {
+          if (record.left.name.toLowerCase().equals(column.tableName().getText().toLowerCase())) {
             result.add(getRecordValue(record.right, colInTable.get(i).primary).toString());
             break;
           }
@@ -264,7 +264,7 @@ public class SelectPlan extends LogicalPlan {
     if (useWhere) columnName = L_where.tableName().getText();
     for (RecordLogical record : allRecordLogical) {
       if (useWhere)
-        if (columnName.equals(page.left.name)) {
+        if (columnName.toLowerCase().equals(page.left.name.toLowerCase())) {
           //          System.out.println(L_where.getText());
           ValueWrapper recordValue = getRecordValue(record, queryCol.primary);
           //          System.out.println(recordValue.toString() + cmp_where.getText() +
@@ -320,7 +320,7 @@ public class SelectPlan extends LogicalPlan {
         int i = 0;
         for (SQLParser.ColumnFullNameContext column : columns) {
           for (int j = 0; j < records.size(); ++j)
-            if (tables.get(j).name.equals(column.tableName().getText())) {
+            if (tables.get(j).name.toLowerCase().equals(column.tableName().getText().toLowerCase())) {
               result.add(getRecordValue(records.get(j), colInTable.get(i).primary).toString());
               break;
             }
@@ -347,7 +347,7 @@ public class SelectPlan extends LogicalPlan {
       } else {
         Table.TableMetadata table = tables.get(0);
         if (table.getPrimaryKeyNumber() == 1
-            && L_where.columnName().getText().equals(table.getPrimaryKeyList().get(0))) {
+            && L_where.columnName().getText().toLowerCase().equals(table.getPrimaryKeyList().get(0).toLowerCase())) {
           // 单列主键，且WHERE子句查询主键时
           if (cmp_where.EQ() != null) return getEqual(table);
           else if (cmp_where.LE() != null || cmp_where.LT() != null) return getLess(table);

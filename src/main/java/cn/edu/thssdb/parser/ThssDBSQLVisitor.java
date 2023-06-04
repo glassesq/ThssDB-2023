@@ -123,6 +123,10 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
     return new CreateTablePlan(tableMetadata);
   }
 
+  public LogicalPlan visitDropTableStmt(SQLParser.DropTableStmtContext ctx) {
+    return new DropTablePlan(ctx.tableName().getText());
+  }
+
   public LogicalPlan visitInsertStmt(SQLParser.InsertStmtContext ctx) {
     String tableName = ctx.tableName().getText();
 
