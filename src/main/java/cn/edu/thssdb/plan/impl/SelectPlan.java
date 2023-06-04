@@ -47,7 +47,8 @@ public class SelectPlan extends LogicalPlan {
       res.columns.add(column.getText());
       //      System.out.print(column.getText() + ',');
       for (Table.TableMetadata table : tables) {
-        if (tables.size() == 1 || table.name.toLowerCase().equals(column.tableName().getText().toLowerCase())) {
+        if (tables.size() == 1
+            || table.name.toLowerCase().equals(column.tableName().getText().toLowerCase())) {
           String keyName = column.columnName().getText();
           if (table.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
@@ -63,7 +64,9 @@ public class SelectPlan extends LogicalPlan {
     Table.TableMetadata table = !useJoin ? tables.get(0) : null;
     int i = 0;
     for (Table.TableMetadata t : tables) {
-      if (useWhere && useJoin && t.name.toLowerCase().equals(L_where.tableName().getText().toLowerCase())) table = t;
+      if (useWhere
+          && useJoin
+          && t.name.toLowerCase().equals(L_where.tableName().getText().toLowerCase())) table = t;
       if (useJoin) {
         if (t.name.toLowerCase().equals(L_on.tableName().getText().toLowerCase())) {
           String keyName = L_on.columnName().getText();
@@ -320,7 +323,11 @@ public class SelectPlan extends LogicalPlan {
         int i = 0;
         for (SQLParser.ColumnFullNameContext column : columns) {
           for (int j = 0; j < records.size(); ++j)
-            if (tables.get(j).name.toLowerCase().equals(column.tableName().getText().toLowerCase())) {
+            if (tables
+                .get(j)
+                .name
+                .toLowerCase()
+                .equals(column.tableName().getText().toLowerCase())) {
               result.add(getRecordValue(records.get(j), colInTable.get(i).primary).toString());
               break;
             }
@@ -347,7 +354,10 @@ public class SelectPlan extends LogicalPlan {
       } else {
         Table.TableMetadata table = tables.get(0);
         if (table.getPrimaryKeyNumber() == 1
-            && L_where.columnName().getText().toLowerCase().equals(table.getPrimaryKeyList().get(0).toLowerCase())) {
+            && L_where.columnName()
+                .getText()
+                .toLowerCase()
+                .equals(table.getPrimaryKeyList().get(0).toLowerCase())) {
           // 单列主键，且WHERE子句查询主键时
           if (cmp_where.EQ() != null) return getEqual(table);
           else if (cmp_where.LE() != null || cmp_where.LT() != null) return getLess(table);
