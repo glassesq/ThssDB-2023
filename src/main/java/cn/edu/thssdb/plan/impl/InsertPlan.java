@@ -98,7 +98,7 @@ public class InsertPlan extends LogicalPlan {
         String value = "null";
         if (index != null) value = valueToBeInserted.get(index);
 
-        Column column = metadata.getColumnDetailByOrderInType(i, true);
+        Column column = metadata.getColumnDetailByPrimaryField(i);
         if (column.isNotNull() && value.equals("null")) {
           throw new Exception("column " + column.getName() + " can not be null but value is null");
         }
@@ -107,9 +107,9 @@ public class InsertPlan extends LogicalPlan {
       }
 
       // TODO: check for NOT NULL constraint
-      for (String value : result) {
-        //        System.out.print(value + " ");
-      }
+      //      for (String value : result) {
+      //        System.out.print(value + " ");
+      //      }
       //      System.out.println("****");
 
       results.add(result);

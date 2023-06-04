@@ -303,7 +303,7 @@ public class Table {
 
       for (int i = 0; i < primaryKeyNumber; i++) {
         Column column = getColumnDetailByOrderInType(i, true);
-        if (values.get(primaryKeyNumber + i).equals("null") && column.isNotNull()) return false;
+        if (values.get(i).equals("null") && column.isNotNull()) return false;
         ValueWrapper valueWrapper = new ValueWrapper(column);
         valueWrapper.setWithNull(values.get(i));
         recordToBeInserted.primaryKeyValues[i] = valueWrapper;
