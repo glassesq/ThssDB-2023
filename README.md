@@ -29,7 +29,7 @@ For default configurations using JSON, relevant JSONObject and JSONArray shall b
 
 #### 基础要求
 
-- [ ] 实现表的创建、删除；
+- [x] 实现表的创建、删除；
 - [x] 实现数据库的创建、删除、切换；
 - [x] 实现表和数据库的元数据（有哪些数据库，数据库里有哪些表，每个表的结构如何）的持久化。
 - [x] 重启数据库时从持久化的元数据中恢复系统信息。
@@ -55,7 +55,7 @@ For default configurations using JSON, relevant JSONObject and JSONArray shall b
         name String(256), ID Int not null, PRIMARY KEY(ID))
 ```
 
-- [ ] 删除表：删除某张表的模式信息`` DROP TABLE tableName;``
+- [x] 删除表：删除某张表的模式信息`` DROP TABLE tableName;``
 - [x] 查找表：展示某张表的模式信息(每一列的名字及其数据类型，格式自定);`` SHOW TABLE tableName; ``
 
 #### 进阶要求
