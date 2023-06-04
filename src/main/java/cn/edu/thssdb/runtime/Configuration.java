@@ -4,14 +4,13 @@ public class Configuration {
 
   public final int warningMemory = 4 * 1024 * 1024;
   public String testPath = "D:\\项目\\tmp";
-
   public String tablespacePath = testPath + "/" + "base";
   public String testPathRecover = testPath + "/" + "checkpoint";
   public String WALFilename = testPath + "/" + "WAL.log";
   public String DummyLogFilename = testPath + "/" + "DummyLog.log";
   public String DummyLogRecoverFilename = testPath + "/" + "DummyLogRecover.log";
   public String MetadataFilename = tablespacePath + "/" + "example.json";
-  public int pageSize = 2 * 1024;
+  public int pageSize = 512;
   public final int bufferSize = 30;
 
   public final int overallPageIndex = 0;

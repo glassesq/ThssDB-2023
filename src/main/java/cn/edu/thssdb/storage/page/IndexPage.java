@@ -898,11 +898,6 @@ public class IndexPage extends Page {
     RecordInPage nextRecord = previousPointerRecord.nextRecordInPage;
     pointerRecordToBeInserted.setNextRecordInPage(nextRecord);
 
-    /* set rightest and modify pointer to next layer. */
-    if (nextRecord.recordType == RecordInPage.SYSTEM_SUPREME_RECORD && nextRecord.isRightest()) {
-      nextRecord.nextAbsoluteOffset = childPageToPoint;
-    }
-
     previousPointerRecord.nextAbsoluteOffset = pointerRecordToBeInserted.myOffset;
     /* reference assignment is atomic.*/
     /* ********************** BEGIN ATOMIC ********************** */

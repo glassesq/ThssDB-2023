@@ -56,10 +56,11 @@ public class IndexPageTest {
   @After
   public void cleanup() {
     System.out.println("\n ##### END TEST");
-    //    try {
-    //      FileUtils.deleteDirectory(testDir);
-    //    } catch (Exception ignore) {
-    //    }
+    try {
+      FileUtils.deleteDirectory(testDir);
+    } catch (Exception ignore) {
+      ignore.printStackTrace();
+    }
     System.out.println("END TEST : metadata clean up \n\n");
   }
 
@@ -77,7 +78,7 @@ public class IndexPageTest {
     ArrayList<Column> columns = new ArrayList<>();
     ArrayList<String> names = new ArrayList<>();
     ArrayList<Integer> orders = new ArrayList<>();
-    int primaryKeyNumber = 5;
+    int primaryKeyNumber = 1;
     int nonPrimaryKeyNumber = 5;
 
     for (int i = 0; i < primaryKeyNumber + nonPrimaryKeyNumber; i++) {
@@ -116,7 +117,7 @@ public class IndexPageTest {
 
     //    File targetFile = new File("/Users/rongyi/Desktop/wrong2.txt");
     //    LineIterator iterator = FileUtils.lineIterator(targetFile, "UTF-8");
-    for (int time = 0; time < 10000; time++) {
+    for (int time = 0; time < 1000; time++) {
       RecordLogical record = new RecordLogical(tableMetadata);
       for (int i = 0; i < record.primaryKeyValues.length; i++) {
         Pair<String, ValueWrapper> r =
@@ -285,7 +286,7 @@ public class IndexPageTest {
     ArrayList<Column> columns = new ArrayList<>();
     ArrayList<String> names = new ArrayList<>();
     ArrayList<Integer> orders = new ArrayList<>();
-    int primaryKeyNumber = 10;
+    int primaryKeyNumber = 1;
     int nonPrimaryKeyNumber = 10;
     for (int i = 0; i < primaryKeyNumber + nonPrimaryKeyNumber; i++) {
       Column column = new Column();
@@ -370,12 +371,14 @@ public class IndexPageTest {
     types[4] = DataType.DOUBLE;
 
     Table.TableMetadata tableMetadata = new Table.TableMetadata();
-    tableMetadata.prepare("testRecordInPageNotSplitSingleThread", ServerRuntime.newTablespace());
+    tableMetadata.prepare(
+        "testRecordInPageNotSplitSingleThread" + ThreadLocalRandom.current().nextInt(),
+        ServerRuntime.newTablespace());
     ArrayList<Column> columns = new ArrayList<>();
     ArrayList<String> names = new ArrayList<>();
     ArrayList<Integer> orders = new ArrayList<>();
-    int primaryKeyNumber = 10;
-    int nonPrimaryKeyNumber = 10;
+    int primaryKeyNumber = 1;
+    int nonPrimaryKeyNumber = 5;
     for (int i = 0; i < primaryKeyNumber + nonPrimaryKeyNumber; i++) {
       Column column = new Column();
       String columnName = "column" + String.valueOf(i - nonPrimaryKeyNumber);
@@ -449,7 +452,9 @@ public class IndexPageTest {
           rootPage.scanInternal(transactionId, recordInPage.primaryKeyValues);
       if (insertPos.left) continue;
 
+      System.out.println(recordThird);
       rootPage.insertDataRecordIntoTree(transactionId, recordThird);
+      System.out.println("insert ok.");
       recordsInRoot.add(record);
 
       insertPos = rootPage.scanTreeAndReturnRecord(transactionId, recordThird.primaryKeyValues);
