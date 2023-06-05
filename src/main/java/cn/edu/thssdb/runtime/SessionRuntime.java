@@ -231,9 +231,19 @@ public class SessionRuntime {
           break;
         }
         ArrayList<Table.TableMetadata> tables = new ArrayList<>();
+        int flag = 0;
         for (String tableName : selectPlan.tableNames) {
-          tables.add(currentDatabaseMetadata.getTableByName(tableName));
+          Table.TableMetadata tableData = currentDatabaseMetadata.getTableByName(tableName);
+          if (tableData == null) {
+            response =
+                new ExecuteStatementResp(
+                    StatusUtil.fail("Table " + tableName + " not found."), false);
+            flag = 1;
+            break;
+          }
+          tables.add(tableData);
         }
+        if (flag == 1) break;
         QueryResult result;
         try {
           result = selectPlan.getResult(transactionId, tables);

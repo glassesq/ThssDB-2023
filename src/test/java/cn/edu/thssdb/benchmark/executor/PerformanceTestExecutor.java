@@ -92,7 +92,8 @@ public class PerformanceTestExecutor extends TestExecutor {
                     long startTime = System.nanoTime();
                     transaction.execute(client);
                     long finishTime = System.nanoTime();
-//                    Assert.assertEquals(Constants.SUCCESS_STATUS_CODE, resp1.status.code);
+                    //                    Assert.assertEquals(Constants.SUCCESS_STATUS_CODE,
+                    // resp1.status.code);
                     measurement.record(
                         type, transaction.getTransactionSize(), finishTime - startTime);
                   }
