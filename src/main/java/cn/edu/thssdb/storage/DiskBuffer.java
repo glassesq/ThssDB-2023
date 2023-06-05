@@ -282,17 +282,9 @@ public class DiskBuffer {
     int spaceId = (int) (key >> 32);
     int pageId = key.intValue();
     String tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
-    FileChannel channel = outputChannel.get(tablespaceFilename);
-    if (channel == null) {
-      RandomAccessFile tablespaceFile = new RandomAccessFile(tablespaceFilename, "rw");
-      channel = tablespaceFile.getChannel();
-      outputChannel.put(tablespaceFilename, channel);
-    }
-    channel.position(ServerRuntime.config.pageSize * ((long) 0x00000000FFFFFFFF & pageId));
-    ByteBuffer buf = ByteBuffer.allocate(ServerRuntime.config.pageSize);
-    buf.put(suite.bytes);
-    buf.flip();
-    channel.write(buf);
-    channel.force(false);
+    RandomAccessFile tablespaceFile = new RandomAccessFile(tablespaceFilename, "rw");
+    tablespaceFile.seek(ServerRuntime.config.pageSize * ((long) 0x00000000FFFFFFFF & pageId));
+    tablespaceFile.write(suite.bytes, 0, ServerRuntime.config.pageSize);
+    tablespaceFile.close();
   }
 }
