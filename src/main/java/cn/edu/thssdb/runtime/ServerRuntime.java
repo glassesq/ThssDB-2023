@@ -101,7 +101,9 @@ public class ServerRuntime {
     if (config.serializable) {
       if (!persistPage.containsKey(transactionId)) persistPage.put(transactionId, new HashSet<>());
       persistPage.get(transactionId).add(tracePage);
-      getTwoPhaseLock(transactionId, lock.readLock());
+//      getTwoPhaseLock(transactionId, lock.readLock());
+      /** to avoid deadlock in TransactionTest */
+      getTwoPhaseLock(transactionId, lock.writeLock());
     } else {
       // TODO: deadlock check
       lock.readLock().lock();
