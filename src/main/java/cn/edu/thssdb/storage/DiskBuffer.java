@@ -126,7 +126,7 @@ public class DiskBuffer {
                   System.gc();
                   blockingFactor = blockingFactor << 1;
                   int sleepTime = blockingFactor * 5;
-                  Thread.sleep(0, sleepTime);
+                  Thread.sleep(sleepTime / 1000, sleepTime % 1000);
                   while (Runtime.getRuntime().freeMemory() <= ServerRuntime.config.warningMemory) {
                     if (sleepTime / 1000 > 50) {
                       if (ThreadLocalRandom.current().nextFloat() < 0.05) break;

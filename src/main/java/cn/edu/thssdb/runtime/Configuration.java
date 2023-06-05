@@ -45,7 +45,7 @@ public class Configuration {
   public Configuration() {
     allow_implicit_transaction = true;
     auto_commit = true;
-    serializable = true;
+    serializable = false;
     useDummyLog = true;
     recoverFromDummyLog = false;
   }
