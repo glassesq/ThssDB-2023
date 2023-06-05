@@ -19,7 +19,7 @@ import static org.junit.Assert.assertFalse;
 
 public class IndexPageTest {
 
-  File testDir;
+  static File testDir;
   String databaseName = "testIndexPageDatabase";
   Database.DatabaseMetadata currentDatabase = null;
 
@@ -27,7 +27,7 @@ public class IndexPageTest {
   public void setup() throws Exception {
     System.out.println("maximum memory: " + Runtime.getRuntime().maxMemory());
     System.out.println(" ##### START TEST");
-    ServerRuntime.config.testPath = "./testOnly";
+    ServerRuntime.config.testPath = "./testOnly" + ThreadLocalRandom.current().nextInt();
     ServerRuntime.config.MetadataFilename = ServerRuntime.config.testPath + "/example.json";
     ServerRuntime.config.WALFilename = ServerRuntime.config.testPath + "/WAL.log";
     ServerRuntime.config.DummyLogFilename = ServerRuntime.config.testPath + "/dummy.log";
@@ -45,7 +45,7 @@ public class IndexPageTest {
     testDir.mkdirs();
     ServerRuntime.setup();
     /* create an empty database for testing purpose. */
-    int transactionId = ServerRuntime.newTablespace();
+    long transactionId = ServerRuntime.newTransaction();
     Database.DatabaseMetadata.createDatabase(transactionId, databaseName);
     currentDatabase =
         ServerRuntime.databaseMetadata.get(ServerRuntime.databaseNameLookup.get(databaseName));
@@ -57,6 +57,7 @@ public class IndexPageTest {
   public void cleanup() {
     System.out.println("\n ##### END TEST");
     try {
+      Thread.sleep(1000);
       FileUtils.deleteDirectory(testDir);
     } catch (Exception ignore) {
       ignore.printStackTrace();
@@ -74,7 +75,7 @@ public class IndexPageTest {
     types[4] = DataType.DOUBLE;
 
     Table.TableMetadata tableMetadata = new Table.TableMetadata();
-    tableMetadata.prepare("testSplitDataPageAfterRootIsSplit", ServerRuntime.newTablespace());
+    tableMetadata.prepare("A", ServerRuntime.newTablespace());
     ArrayList<Column> columns = new ArrayList<>();
     ArrayList<String> names = new ArrayList<>();
     ArrayList<Integer> orders = new ArrayList<>();
@@ -159,7 +160,20 @@ public class IndexPageTest {
       boolean r = rootPage.insertDataRecordIntoTree(transactionId, record);
       //      writer.flush();
       System.out.println(r);
-      r = rootPage.insertDataRecordIntoTree(transactionId, record);
+
+      boolean checkR = true;
+      for (RecordLogical recordAlready : recordsInRoot) {
+        if (ValueWrapper.compareArray(recordAlready.primaryKeyValues, record.primaryKeyValues)
+            == 0) {
+          checkR = false;
+          break;
+        }
+      }
+
+      assertEquals(r, checkR);
+      if (!r) continue;
+
+      //      r = rootPage.insertDataRecordIntoTree(transactionId, record);
       ServerRuntime.releaseAllLocks(transactionId);
 
       recordsInRoot.add(record);
@@ -199,7 +213,6 @@ public class IndexPageTest {
     recordsInRoot.sort((a, b) -> ValueWrapper.compareArray(a.primaryKeyValues, b.primaryKeyValues));
 
     transactionId = ServerRuntime.newTransaction();
-    rootPage.splitRoot(transactionId);
     ServerRuntime.releaseAllLocks(transactionId);
 
     IndexPage testPage;
@@ -282,7 +295,7 @@ public class IndexPageTest {
     types[4] = DataType.DOUBLE;
 
     Table.TableMetadata tableMetadata = new Table.TableMetadata();
-    tableMetadata.prepare("testSplitRootWithoutLock", ServerRuntime.newTablespace());
+    tableMetadata.prepare("B", ServerRuntime.newTablespace());
     ArrayList<Column> columns = new ArrayList<>();
     ArrayList<String> names = new ArrayList<>();
     ArrayList<Integer> orders = new ArrayList<>();
@@ -372,8 +385,7 @@ public class IndexPageTest {
 
     Table.TableMetadata tableMetadata = new Table.TableMetadata();
     tableMetadata.prepare(
-        "testRecordInPageNotSplitSingleThread" + ThreadLocalRandom.current().nextInt(),
-        ServerRuntime.newTablespace());
+        "C" + ThreadLocalRandom.current().nextInt(), ServerRuntime.newTablespace());
     ArrayList<Column> columns = new ArrayList<>();
     ArrayList<String> names = new ArrayList<>();
     ArrayList<Integer> orders = new ArrayList<>();
