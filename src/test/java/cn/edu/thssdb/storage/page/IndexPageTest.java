@@ -56,11 +56,11 @@ public class IndexPageTest {
   @After
   public void cleanup() {
     System.out.println("\n ##### END TEST");
-//    try {
-//      FileUtils.deleteDirectory(testDir);
-//    } catch (Exception ignore) {
-//      ignore.printStackTrace();
-//    }
+    //    try {
+    //      FileUtils.deleteDirectory(testDir);
+    //    } catch (Exception ignore) {
+    //      ignore.printStackTrace();
+    //    }
     System.out.println("END TEST : metadata clean up \n\n");
   }
 
