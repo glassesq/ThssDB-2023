@@ -6,7 +6,7 @@ public class PerformanceTestConfig {
 
   public static final int TABLE_NUMBER = 3;
 
-  public static final int OPERATION_NUMBER = 5000;
+  public static final int OPERATION_NUMBER = 10000;
 
   public static final String OPERATION_RATIO = "60:10:10:10:10";
 

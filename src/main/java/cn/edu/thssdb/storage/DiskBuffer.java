@@ -14,6 +14,7 @@ import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 
 import static cn.edu.thssdb.runtime.ServerRuntime.persistPage;
 import static cn.edu.thssdb.storage.page.Page.*;
@@ -114,7 +115,6 @@ public class DiskBuffer {
               })
           .build(
               key -> {
-                /*
                 if (Runtime.getRuntime().freeMemory() <= ServerRuntime.config.warningMemory) {
                   // TODO: refactor.
                   // better thread sleep control for memory limitation.
@@ -125,7 +125,7 @@ public class DiskBuffer {
                   Thread.sleep(0, sleepTime);
                   while (Runtime.getRuntime().freeMemory() <= ServerRuntime.config.warningMemory) {
                     if (sleepTime / 1000 > 50) {
-                      if (ThreadLocalRandom.current().nextFloat() < 0.3) break;
+                      if (ThreadLocalRandom.current().nextFloat() < 0.05) break;
                     } else {
                       sleepTime = sleepTime * 2;
                     }
@@ -134,7 +134,7 @@ public class DiskBuffer {
                     System.gc();
                   }
                   blockingFactor >>= 1;
-                } */
+                }
                 Page page;
                 SharedSuite suite = recoverArea.get(key);
                 if (suite == null) {
