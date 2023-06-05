@@ -12,6 +12,8 @@ import java.io.RandomAccessFile;
 import java.lang.ref.PhantomReference;
 import java.lang.ref.Reference;
 import java.lang.ref.ReferenceQueue;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
@@ -21,6 +23,8 @@ import static cn.edu.thssdb.storage.page.Page.*;
 import static java.lang.System.exit;
 
 public class DiskBuffer {
+
+  static HashMap<String, FileChannel> outputChannel = new HashMap<>();
 
   public static class MemoryMonitor extends TimerTask {
     public void run() {
@@ -278,9 +282,17 @@ public class DiskBuffer {
     int spaceId = (int) (key >> 32);
     int pageId = key.intValue();
     String tablespaceFilename = ServerRuntime.getTablespaceFile(spaceId);
-    RandomAccessFile tablespaceFile = new RandomAccessFile(tablespaceFilename, "rw");
-    tablespaceFile.seek(ServerRuntime.config.pageSize * ((long) 0x00000000FFFFFFFF & pageId));
-    tablespaceFile.write(suite.bytes, 0, ServerRuntime.config.pageSize);
-    tablespaceFile.close();
+    FileChannel channel = outputChannel.get(tablespaceFilename);
+    if (channel == null) {
+      RandomAccessFile tablespaceFile = new RandomAccessFile(tablespaceFilename, "rw");
+      channel = tablespaceFile.getChannel();
+      outputChannel.put(tablespaceFilename, channel);
+    }
+    channel.position(ServerRuntime.config.pageSize * ((long) 0x00000000FFFFFFFF & pageId));
+    ByteBuffer buf = ByteBuffer.allocate(ServerRuntime.config.pageSize);
+    buf.put(suite.bytes);
+    buf.flip();
+    channel.write(buf);
+    channel.force(false);
   }
 }
