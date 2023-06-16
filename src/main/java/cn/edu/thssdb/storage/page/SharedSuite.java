@@ -1,5 +1,6 @@
 package cn.edu.thssdb.storage.page;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -23,4 +24,6 @@ public class SharedSuite {
   public ReentrantLock suiteLock = new ReentrantLock();
 
   public AtomicInteger maxPageId = null;
+
+  public AtomicBoolean isDirty = null;
 }

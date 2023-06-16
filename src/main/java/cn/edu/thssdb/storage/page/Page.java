@@ -2,6 +2,7 @@ package cn.edu.thssdb.storage.page;
 
 import cn.edu.thssdb.communication.IO;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -19,6 +20,7 @@ public class Page {
     suite.pageReadAndWriteLatch = this.pageReadAndWriteLatch;
     suite.maxPageId = this.maxPageId;
     suite.counter = 1;
+    suite.isDirty = this.isDirty;
     return suite;
   }
 
@@ -74,6 +76,8 @@ public class Page {
   public IndexPage.RecordInPage infimumRecord;
 
   public AtomicInteger maxPageId = null;
+
+  public AtomicBoolean isDirty = new AtomicBoolean(false);
 
   public Page(byte[] bytes) {
     this.bytes = bytes;

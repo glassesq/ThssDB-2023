@@ -3,7 +3,7 @@ package cn.edu.thssdb.runtime;
 public class Configuration {
 
   public final int warningMemory = 4 * 1024 * 1024;
-  public String testPath = "/Users/rongyi/Desktop/metadata";
+  public String testPath = "./metadata";
 
   public String tablespacePath = testPath + "/" + "base";
   public String testPathRecover = testPath + "/" + "checkpoint";
@@ -12,7 +12,7 @@ public class Configuration {
   public String DummyLogRecoverFilename = testPath + "/" + "DummyLogRecover.log";
   public String MetadataFilename = tablespacePath + "/" + "example.json";
   public int pageSize = 16 * 1024;
-  public final int bufferSize = 30;
+  public final int bufferSize = 300;
 
   public final int overallPageIndex = 0;
   public final int indexRootPageIndex = 1;

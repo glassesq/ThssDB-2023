@@ -312,6 +312,10 @@ public class ServerRuntime {
     timer.schedule(new DiskBuffer.MemoryMonitor(), 0, 2000);
     /* Throw pages out of memory. */
     new Thread(DiskBuffer::throwPages).start();
+    new Thread(DiskBuffer::throwPages).start();
+    new Thread(DiskBuffer::throwPages).start();
+    new Thread(DiskBuffer::throwPages).start();
+    new Thread(DiskBuffer::throwPages).start();
     /* Checkpoint maker */
     new Thread(
             () -> {

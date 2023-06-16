@@ -65,7 +65,7 @@ public class DiskBuffer {
           // suite.counter);
           if (--suite.counter == 0) {
             try {
-              DiskBuffer.output(key, suite);
+              if (suite.isDirty.get()) DiskBuffer.output(key, suite);
             } catch (Exception e) {
               e.printStackTrace();
               exit(45);

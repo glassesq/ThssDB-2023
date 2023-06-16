@@ -58,6 +58,7 @@ public class IO {
       for (int i = offset, s = 0; i < offset + length; i++, s++) {
         page.bytes[i] = newValue[s];
       }
+      page.isDirty.set(true);
       page.pageWriteAndOutputLatch.unlock();
     } else {
       /* Write the changes to disk buffer */
