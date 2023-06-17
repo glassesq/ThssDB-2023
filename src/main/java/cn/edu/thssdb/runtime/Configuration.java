@@ -12,7 +12,7 @@ public class Configuration {
   public String DummyLogRecoverFilename = testPath + "/" + "DummyLogRecover.log";
   public String MetadataFilename = tablespacePath + "/" + "example.json";
   public int pageSize = 16 * 1024;
-  public final int bufferSize = 300;
+  public final int bufferSize = 700;
 
   public final int overallPageIndex = 0;
   public final int indexRootPageIndex = 1;
@@ -45,7 +45,7 @@ public class Configuration {
   public Configuration() {
     allow_implicit_transaction = true;
     auto_commit = true;
-    serializable = true;
-    recoverFromDummyLog = true;
+    serializable = false;
+    recoverFromDummyLog = false;
   }
 }

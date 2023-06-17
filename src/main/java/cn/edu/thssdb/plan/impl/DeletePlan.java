@@ -106,7 +106,6 @@ public class DeletePlan extends LogicalPlan {
   }
 
   public void deleteCondition(Table.TableMetadata table) throws Exception {
-    System.out.println("delete condition");
     IndexPage rootPage =
         (IndexPage) IO.read(table.spaceId, ServerRuntime.config.indexRootPageIndex);
     IndexPage.recordCondition condition;
@@ -123,7 +122,6 @@ public class DeletePlan extends LogicalPlan {
     IndexPage rightpage;
     while (pageIter > 0) {
       rightpage = (IndexPage) IO.read(table.spaceId, pageIter);
-      System.out.println("pageIter: " + pageIter);
       pageIter = rightpage.deleteWithCondition(transactionId, condition, null);
     }
   }
