@@ -16,7 +16,6 @@ public class Page {
     suite.bytes = this.bytes;
     suite.infimumRecord = this.infimumRecord;
     suite.pageWriteAndOutputLatch = this.pageWriteAndOutputLatch;
-    suite.firstSplitLatch = this.firstSplitLock;
     suite.pageReadAndWriteLatch = this.pageReadAndWriteLatch;
     suite.maxPageId = this.maxPageId;
     suite.counter = 1;
@@ -68,8 +67,6 @@ public class Page {
 
   /* raw bytes of this page. */
   public byte[] bytes;
-
-  public ReentrantLock firstSplitLock = new ReentrantLock();
 
   public ReentrantLock bLinkTreeLatch = new ReentrantLock();
 

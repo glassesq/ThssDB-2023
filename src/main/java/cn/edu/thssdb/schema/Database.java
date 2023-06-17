@@ -84,6 +84,9 @@ public class Database {
         IO.writeCreateTable(transactionId, this.databaseId, tableMetadata);
         tableMetadata.initTablespaceFile(transactionId);
         ServerRuntime.tableMetadata.put(tableMetadata.spaceId, tableMetadata);
+
+        tableMetadata.insertRecord(transactionId, null);
+
       } catch (Exception shallNeverHappen) {
         exit(4);
       }

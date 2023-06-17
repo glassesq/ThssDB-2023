@@ -264,7 +264,6 @@ public class DiskBuffer {
     }
     page.pageReadAndWriteLatch = sharedSuite.pageReadAndWriteLatch;
     page.pageWriteAndOutputLatch = sharedSuite.pageWriteAndOutputLatch;
-    page.firstSplitLock = sharedSuite.firstSplitLatch;
     page.bLinkTreeLatch = sharedSuite.bLinkTreeLatch;
     page.infimumRecord = sharedSuite.infimumRecord;
     page.maxPageId = sharedSuite.maxPageId;

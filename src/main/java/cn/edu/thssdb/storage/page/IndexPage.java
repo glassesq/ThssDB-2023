@@ -494,16 +494,13 @@ public class IndexPage extends Page {
     }
     if (this.pageReadAndWriteLatch == null)
       return new Pair<>(ServerRuntime.config.indexLeftmostLeafIndex, new ArrayList<>());
-    firstSplitLock.lock();
     if (this.infimumRecord.nextRecordInPage.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
-      firstSplitLock.unlock();
       return new Pair<>(ServerRuntime.config.indexLeftmostLeafIndex, new ArrayList<>());
     }
     try {
       IndexPage leftPage =
           (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexLeftmostLeafIndex);
       ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch, leftPage);
-      firstSplitLock.unlock();
       return new Pair<>(0, new ArrayList<>());
     } catch (Exception e) {
       System.out.println(e);
@@ -677,77 +674,65 @@ public class IndexPage extends Page {
             == RecordInPage.SYSTEM_SUPREME_RECORD) {
       // TODO: prettier plz :-)
       /* The first insert of the whole b-link tree. Assert(currentPage == rootPage)*/
-      currentPage.firstSplitLock.lock();
-      if (!(currentPage.isRoot()
-          && currentPage.infimumRecord.nextRecordInPage.recordType
-              == RecordInPage.SYSTEM_SUPREME_RECORD)) {
-        /* double check:
-        root page has been already split.
-        The overhead is accepted because it will only happen a few times. */
-        currentPage.firstSplitLock.unlock();
-        return insertDataRecordIntoTree(transactionId, dataRecordToBeInserted);
-      } else {
-        Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
+      Table.TableMetadata metadata = ServerRuntime.tableMetadata.get(this.spaceId);
 
-        /* The page has already been inited when creating table. */
-        int leftPageId = ServerRuntime.config.indexLeftmostLeafIndex;
-        IndexPage leftPage = null;
-        try {
-          leftPage = (IndexPage) IO.read(this.spaceId, leftPageId);
-        } catch (Exception ignored) {
-        }
-        /* 2PL write lock of new page */
-        ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch, leftPage);
-
-        /* prepare records in new left page*/
-        RecordInPage leftPageSupremeRecord = leftPage.infimumRecord.nextRecordInPage;
-        RecordInPage onlyRecordInLeft =
-            makeRecordInPageFromLogical(dataRecordToBeInserted, metadata);
-        onlyRecordInLeft.myOffset = 64 + metadata.getNullBitmapLengthInByte() + 4;
-
-        /* build link in new left page */
-        leftPage.infimumRecord.setNextRecordInPage(onlyRecordInLeft);
-        onlyRecordInLeft.setNextRecordInPage(leftPageSupremeRecord);
-
-        /* set left page as the rightest leaf page. */
-        leftPageSupremeRecord.setRightest();
-        leftPageSupremeRecord.nextAbsoluteOffset = 0;
-
-        /* prepare pointer record towards left page in root page. */
-        RecordInPage newSupremeRecord =
-            RecordInPage.createRecordInPageEntry(
-                RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, leftPageId, 0);
-        RecordInPage leftPointerRecord = makePointerRecord(onlyRecordInLeft, leftPageId);
-
-        /* build link in root page */
-        leftPointerRecord.myOffset = 64 + 4;
-        leftPointerRecord.setNextRecordInPage(newSupremeRecord);
-
-        /* set root page as the rightest */
-        newSupremeRecord.setRightest();
-
-        /* update freespace */
-        this.freespaceStart.set(leftPointerRecord.myOffset + metadata.getPrimaryKeyNumber() + 4);
-        leftPage.freespaceStart.set(
-            onlyRecordInLeft.myOffset
-                + metadata.getNonPrimaryKeyLength()
-                + metadata.getPrimaryKeyLength());
-
-        infimumRecord.nextAbsoluteOffset = leftPointerRecord.myOffset;
-        /* ******************************** BEGIN ATOMIC ********************* */
-        infimumRecord.nextRecordInPage = leftPointerRecord;
-        /* ******************************** END ATOMIC ********************* */
-
-        leftPage.writeAll(transactionId);
-        this.writeAll(transactionId);
-
-        currentPage.pageReadAndWriteLatch = null;
-        DiskBuffer.recoverArea.get(DiskBuffer.concat(currentPage.spaceId, currentPage.pageId))
-                .pageReadAndWriteLatch =
-            null;
-        currentPage.firstSplitLock.unlock();
-        return true;
+      /* The page has already been inited when creating table. */
+      int leftPageId = ServerRuntime.config.indexLeftmostLeafIndex;
+      IndexPage leftPage = null;
+      try {
+        leftPage = (IndexPage) IO.read(this.spaceId, leftPageId);
+      } catch (Exception ignored) {
       }
+      /* 2PL write lock of new page */
+      ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch, leftPage);
+
+      /* prepare records in new left page*/
+      RecordInPage leftPageSupremeRecord = leftPage.infimumRecord.nextRecordInPage;
+      RecordInPage onlyRecordInLeft = makeRecordInPageFromLogical(dataRecordToBeInserted, metadata);
+      onlyRecordInLeft.myOffset = 64 + metadata.getNullBitmapLengthInByte() + 4;
+
+      /* build link in new left page */
+      leftPage.infimumRecord.setNextRecordInPage(onlyRecordInLeft);
+      onlyRecordInLeft.setNextRecordInPage(leftPageSupremeRecord);
+      onlyRecordInLeft.setDeleted();
+
+      /* set left page as the rightest leaf page. */
+      leftPageSupremeRecord.setRightest();
+      leftPageSupremeRecord.nextAbsoluteOffset = 0;
+
+      /* prepare pointer record towards left page in root page. */
+      RecordInPage newSupremeRecord =
+          RecordInPage.createRecordInPageEntry(
+              RecordInPage.SYSTEM_SUPREME_RECORD, 0, 0, 0, leftPageId, 0);
+      RecordInPage leftPointerRecord = makePointerRecord(onlyRecordInLeft, leftPageId);
+
+      /* build link in root page */
+      leftPointerRecord.myOffset = 64 + 4;
+      leftPointerRecord.setNextRecordInPage(newSupremeRecord);
+
+      /* set root page as the rightest */
+      newSupremeRecord.setRightest();
+
+      /* update freespace */
+      this.freespaceStart.set(leftPointerRecord.myOffset + metadata.getPrimaryKeyNumber() + 4);
+      leftPage.freespaceStart.set(
+          onlyRecordInLeft.myOffset
+              + metadata.getNonPrimaryKeyLength()
+              + metadata.getPrimaryKeyLength());
+
+      infimumRecord.nextAbsoluteOffset = leftPointerRecord.myOffset;
+      /* ******************************** BEGIN ATOMIC ********************* */
+      infimumRecord.nextRecordInPage = leftPointerRecord;
+      /* ******************************** END ATOMIC ********************* */
+
+      leftPage.writeAll(transactionId);
+      this.writeAll(transactionId);
+
+      currentPage.pageReadAndWriteLatch = null;
+      DiskBuffer.recoverArea.get(DiskBuffer.concat(currentPage.spaceId, currentPage.pageId))
+              .pageReadAndWriteLatch =
+          null;
+      return true;
     }
     do {
       result = currentPage.scanInternal(transactionId, dataRecordToBeInserted.primaryKeyValues);
@@ -1438,16 +1423,13 @@ public class IndexPage extends Page {
   public int deleteFromLeftmostDataPage(
       long transactionId, recordCondition condition, ArrayList<RecordInPage> recordDeleted) {
     if (this.pageReadAndWriteLatch == null) return ServerRuntime.config.indexLeftmostLeafIndex;
-    firstSplitLock.lock();
     if (this.infimumRecord.nextRecordInPage.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
-      firstSplitLock.unlock();
       return ServerRuntime.config.indexLeftmostLeafIndex;
     }
     try {
       IndexPage leftPage =
           (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexLeftmostLeafIndex);
       ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch, leftPage);
-      firstSplitLock.unlock();
     } catch (Exception e) {
       return 0;
     }
@@ -1498,7 +1480,6 @@ public class IndexPage extends Page {
     /* This must be a data page. */
 
     if (this.infimumRecord.nextRecordInPage.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
-      firstSplitLock.lock();
       if (this.infimumRecord.nextRecordInPage.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
         IndexPage leftPage = null;
         try {
@@ -1508,10 +1489,8 @@ public class IndexPage extends Page {
           exit(62);
         }
         ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch, leftPage);
-        firstSplitLock.unlock();
         return new Pair<>(0, 0);
       }
-      firstSplitLock.unlock();
     }
 
     ServerRuntime.getWriteLock(transactionId, this.pageReadAndWriteLatch, this);
@@ -1551,7 +1530,6 @@ public class IndexPage extends Page {
       throws Exception {
 
     if (this.infimumRecord.nextRecordInPage.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
-      firstSplitLock.lock();
       if (this.infimumRecord.nextRecordInPage.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
         IndexPage leftPage = null;
         try {
@@ -1561,10 +1539,8 @@ public class IndexPage extends Page {
           exit(62);
         }
         ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch, leftPage);
-        firstSplitLock.unlock();
         return null;
       }
-      firstSplitLock.unlock();
     }
 
     Pair<Boolean, RecordInPage> result;

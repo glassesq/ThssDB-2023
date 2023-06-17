@@ -4,6 +4,7 @@ import cn.edu.thssdb.communication.IO;
 import cn.edu.thssdb.runtime.ServerRuntime;
 import cn.edu.thssdb.storage.page.IndexPage;
 import cn.edu.thssdb.storage.page.OverallPage;
+import cn.edu.thssdb.type.DataType;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
@@ -298,18 +299,31 @@ public class Table {
 
       for (int i = 0; i < primaryKeyNumber; i++) {
         Column column = getColumnDetailByOrderInType(i, true);
-        if (values.get(i).equals("null") && column.isNotNull()) return false;
-        ValueWrapper valueWrapper = new ValueWrapper(column);
-        valueWrapper.setWithNull(values.get(i));
-        recordToBeInserted.primaryKeyValues[i] = valueWrapper;
+        if (values == null) {
+          ValueWrapper valueWrapper = new ValueWrapper(column);
+          if (column.type != DataType.STRING) valueWrapper.setWithNull("0");
+          else valueWrapper.setWithNull("''");
+          recordToBeInserted.primaryKeyValues[i] = valueWrapper;
+        } else {
+          if (values.get(i).equals("null") && column.isNotNull()) return false;
+          ValueWrapper valueWrapper = new ValueWrapper(column);
+          valueWrapper.setWithNull(values.get(i));
+          recordToBeInserted.primaryKeyValues[i] = valueWrapper;
+        }
       }
 
       for (int i = 0; i < nonPrimaryKeyNumber; i++) {
         Column column = getColumnDetailByOrderInType(i, false);
-        if (values.get(primaryKeyNumber + i).equals("null") && column.isNotNull()) return false;
-        ValueWrapper valueWrapper = new ValueWrapper(column);
-        valueWrapper.setWithNull(values.get(primaryKeyNumber + i));
-        recordToBeInserted.nonPrimaryKeyValues[i] = valueWrapper;
+        if (values == null) {
+          ValueWrapper valueWrapper = new ValueWrapper(column);
+          valueWrapper.setWithNull("null");
+          recordToBeInserted.nonPrimaryKeyValues[i] = valueWrapper;
+        } else {
+          if (values.get(primaryKeyNumber + i).equals("null") && column.isNotNull()) return false;
+          ValueWrapper valueWrapper = new ValueWrapper(column);
+          valueWrapper.setWithNull(values.get(primaryKeyNumber + i));
+          recordToBeInserted.nonPrimaryKeyValues[i] = valueWrapper;
+        }
       }
 
       IndexPage rootPage;
