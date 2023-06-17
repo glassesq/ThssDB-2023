@@ -22,7 +22,6 @@ import static java.lang.System.exit;
 public class Table {
 
   public static class TableMetadata {
-    // TODO: Lock is allocated at the unit of transaction.
 
     /** spaceId is a positive integer. */
     public int spaceId;
@@ -166,11 +165,7 @@ public class Table {
           return 4 + 4 + getPrimaryKeyLength() + getNullBitmapLengthInByte();
         case IndexPage.RecordInPage.USER_DATA_RECORD:
         default:
-          return 4
-              + 15
-              + getPrimaryKeyLength()
-              + getNonPrimaryKeyLength()
-              + getNullBitmapLengthInByte();
+          return 4 + getPrimaryKeyLength() + getNonPrimaryKeyLength() + getNullBitmapLengthInByte();
       }
     }
 
@@ -327,9 +322,5 @@ public class Table {
       }
       return false;
     }
-  }
-
-  public void delete() {
-    // TODO
   }
 }

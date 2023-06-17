@@ -28,7 +28,12 @@ public class SessionRuntime {
 
   /** stop the session. */
   public void stop() {
-    // TODO
+    if (transactionId > 0) {
+      IO.writeDummyStatementLog(transactionId, sessionId + "commit");
+      IO.pushTransactionCommit(transactionId);
+      ServerRuntime.releaseAllLocks(transactionId);
+    }
+    transactionId = -1;
   }
 
   /**
@@ -128,11 +133,9 @@ public class SessionRuntime {
       return response;
     }
 
-    // TODO: wrap databaseMetadata.get and add metadataLatch to protect it.
     Database.DatabaseMetadata currentDatabaseMetadata =
         ServerRuntime.databaseMetadata.get(databaseId);
     if (currentDatabaseMetadata == null) {
-      // TODO: roll back
       IO.pushTransactionCommit(transactionId);
       ServerRuntime.releaseAllLocks(transactionId);
       transactionId = -1;
@@ -330,24 +333,4 @@ public class SessionRuntime {
     return new ExecuteStatementResp(
         StatusUtil.fail("Command not understood or implemented."), false);
   }
-  /*    } catch (Exception e) {
-
-  ExecuteStatementResp response =
-      new ExecuteStatementResp(StatusUtil.fail(e.getMessage()), false);
-  if (!usingBeginTransaction && ServerRuntime.config.auto_commit) {
-    response.status.msg =
-        " [WARNING!] The operation not succeed. But we 'commit' it for now.\n"
-            + response.status.msg;
-    try {
-      IO.pushTransactionCommit(transactionId);
-    } catch (Exception shallNeverHappen) {
-       We shall shut down the database, restart and recover it.
-      System.out.println(shallNeverHappen.getMessage());
-      exit(3);
-    }
-    ServerRuntime.releaseAllLocks(transactionId);
-    transactionId = -1;
-    response.status.msg = response.status.msg + "\n\nEnd of the transaction.(auto commit on).";
-  } */
-
 }

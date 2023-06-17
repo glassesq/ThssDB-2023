@@ -6,6 +6,7 @@ import cn.edu.thssdb.schema.Column;
 import cn.edu.thssdb.schema.RecordLogical;
 import cn.edu.thssdb.schema.Table;
 import cn.edu.thssdb.schema.ValueWrapper;
+import cn.edu.thssdb.storage.DiskBuffer;
 import cn.edu.thssdb.utils.Pair;
 
 import java.nio.charset.StandardCharsets;
@@ -237,11 +238,7 @@ public class IndexPage extends Page {
 
           this.nonPrimaryKeys = new byte[nonPrimaryKeyLength];
           System.arraycopy(
-              page.bytes,
-              pos + primaryKeyLength + 8 + 7,
-              this.nonPrimaryKeys,
-              0,
-              nonPrimaryKeyLength);
+              page.bytes, pos + primaryKeyLength, this.nonPrimaryKeys, 0, nonPrimaryKeyLength);
           this.nonPrimaryKeyValues = new ValueWrapper[metadata.getNonPrimaryKeyNumber()];
 
           primaryOffsetList = metadata.getPrimaryOffsetInOrder();
@@ -277,7 +274,6 @@ public class IndexPage extends Page {
      * @param pos position of the record
      */
     public void write(long transactionId, Page page, int pos) {
-      // TODO: variable length field
       int primaryKeyLength = primaryKeys.length;
       int nonPrimaryKeyLength = nonPrimaryKeys.length;
       int nullBitmapLength = nullBitmap.length;
@@ -286,9 +282,9 @@ public class IndexPage extends Page {
               [nullBitmapLength
                   + 4
                   + primaryKeyLength
-                  + 13
                   + nonPrimaryKeyLength
-                  + 4]; /* maximum */
+                  + 4
+                  + 15]; /* maximum */
       System.arraycopy(nullBitmap, 0, newValue, 0, nullBitmapLength);
       newValue[nullBitmapLength] = flags;
       newValue[nullBitmapLength + 1] = recordType;
@@ -302,13 +298,13 @@ public class IndexPage extends Page {
               nonPrimaryKeys,
               0,
               newValue,
-              nullBitmapLength + 4 + primaryKeyLength + 15,
+              nullBitmapLength + 4 + primaryKeyLength,
               nonPrimaryKeyLength);
           IO.write(
               transactionId,
               page,
               pos - nullBitmapLength - 4,
-              nullBitmapLength + 4 + primaryKeyLength + 15 + nonPrimaryKeyLength,
+              nullBitmapLength + 4 + primaryKeyLength + nonPrimaryKeyLength,
               newValue,
               false);
           break;
@@ -433,7 +429,7 @@ public class IndexPage extends Page {
   }
 
   public void parseIndexHeader() {
-    freespaceStart.set(parseShortBig(32 + 4));
+    freespaceStart.set(parseShortBig(32));
   }
 
   public void writeAll(long transactionId) {
@@ -453,10 +449,10 @@ public class IndexPage extends Page {
    * @param transactionId transactionId
    */
   public void writeIndexHeader(long transactionId) {
-    byte[] newValue = new byte[18];
-    newValue[4] = (byte) (freespaceStart.get() >> 8);
-    newValue[5] = (byte) freespaceStart.get();
-    IO.write(transactionId, this, 32, 18, newValue, false);
+    byte[] newValue = new byte[2];
+    newValue[0] = (byte) (freespaceStart.get() >> 8);
+    newValue[1] = (byte) freespaceStart.get();
+    IO.write(transactionId, this, 32, 2, newValue, false);
   }
 
   /**
@@ -471,7 +467,6 @@ public class IndexPage extends Page {
   public Pair<Integer, ArrayList<RecordLogical>> getAllRecordLogical(long transactionId) {
     ServerRuntime.getReadLock(transactionId, this.pageReadAndWriteLatch, this);
     ArrayList<RecordLogical> recordList = new ArrayList<>();
-
     RecordInPage record = infimumRecord;
     while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
       if (record.recordType != RecordInPage.SYSTEM_INFIMUM_RECORD) {
@@ -590,15 +585,9 @@ public class IndexPage extends Page {
       /* ********************** END ATOMIC ********************** */
 
       this.freespaceStart.set(
-          record.myOffset
-              + metadata.getPrimaryKeyLength()
-              + metadata.getNonPrimaryKeyLength()
-              + 15);
+          record.myOffset + metadata.getPrimaryKeyLength() + metadata.getNonPrimaryKeyLength());
       writeIndexHeader(transactionId);
       record.write(transactionId, this, record.myOffset);
-      if (record.myOffset == record.nextAbsoluteOffset) {
-        exit(1);
-      }
       previousRecord.write(transactionId, this, previousRecord.myOffset);
     } else {
       /* The space has already been allocated. However, the record on it is deleted. */
@@ -610,11 +599,7 @@ public class IndexPage extends Page {
       previousRecord.nextRecordInPage = record;
       /* ********************** END ATOMIC ********************** */
 
-      writeIndexHeader(transactionId);
       record.write(transactionId, this, record.myOffset);
-      if (record.myOffset == record.nextAbsoluteOffset) {
-        exit(1);
-      }
     }
   }
 
@@ -669,8 +654,7 @@ public class IndexPage extends Page {
         record.setNull(i, record.nonPrimaryKeyValues[i].isNull);
       }
     } catch (Exception e) {
-      System.out.println(e);
-      exit(1234);
+      return record;
     }
     return record;
   }
@@ -681,7 +665,6 @@ public class IndexPage extends Page {
    * @param transactionId transaction
    * @param dataRecordToBeInserted data record to be inserted
    * @return true if succeed
-   * @throws Exception IO error
    */
   public boolean insertDataRecordIntoTree(
       long transactionId, RecordLogical dataRecordToBeInserted) {
@@ -711,9 +694,7 @@ public class IndexPage extends Page {
         IndexPage leftPage = null;
         try {
           leftPage = (IndexPage) IO.read(this.spaceId, leftPageId);
-        } catch (Exception e) {
-          e.printStackTrace();
-          exit(60);
+        } catch (Exception ignored) {
         }
         /* 2PL write lock of new page */
         ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch, leftPage);
@@ -750,11 +731,7 @@ public class IndexPage extends Page {
         leftPage.freespaceStart.set(
             onlyRecordInLeft.myOffset
                 + metadata.getNonPrimaryKeyLength()
-                + metadata.getPrimaryKeyLength()
-                + 15);
-
-        //        System.out.println("FIRST INSERT: no write lock can get.");
-        //        System.out.println("FIRST INSERT: no write lock can get!! got!");
+                + metadata.getPrimaryKeyLength());
 
         infimumRecord.nextAbsoluteOffset = leftPointerRecord.myOffset;
         /* ******************************** BEGIN ATOMIC ********************* */
@@ -764,10 +741,10 @@ public class IndexPage extends Page {
         leftPage.writeAll(transactionId);
         this.writeAll(transactionId);
 
-        //        ServerRuntime.father.put(concat(this.spaceId, leftPageId), leftPointerRecord);
-
-        //        currentPage.pageReadAndWriteLatch.writeLock().unlock();
         currentPage.pageReadAndWriteLatch = null;
+        DiskBuffer.recoverArea.get(DiskBuffer.concat(currentPage.spaceId, currentPage.pageId))
+                .pageReadAndWriteLatch =
+            null;
         currentPage.firstSplitLock.unlock();
         return true;
       }
@@ -864,8 +841,7 @@ public class IndexPage extends Page {
       } else {
         try {
           currentPage = (IndexPage) IO.read(this.spaceId, insertResult.right.nextAbsoluteOffset);
-        } catch (Exception neverShallHappen) {
-          exit(7);
+        } catch (Exception ignored) {
         }
       }
     } while (true);
@@ -920,11 +896,6 @@ public class IndexPage extends Page {
     writeIndexHeader(transactionId);
     pointerRecordToBeInserted.write(transactionId, this, pointerRecordToBeInserted.myOffset);
     previousPointerRecord.write(transactionId, this, previousPointerRecord.myOffset);
-
-    //    ServerRuntime.father.put(concat(this.spaceId, childPageToPoint),
-    //    System.out.println("set " + this.pageId + " as father of " + childPageToPoint);
-    //    printStructrue(this);
-    // pointerRecordToBeInserted);
   }
 
   /**
@@ -944,8 +915,7 @@ public class IndexPage extends Page {
     ArrayList<RecordInPage> recordInPage = new ArrayList<>();
     RecordInPage oldSupremeRecord = getRecordInPageAndReturnSupreme(recordInPage);
     if (recordInPage.size() < 2) {
-      System.out.println("shall not split a node which only have two records.");
-      exit(123);
+      return null;
     }
 
     int leftPageId = 0;
@@ -956,7 +926,7 @@ public class IndexPage extends Page {
       leftPageId = overallPage.allocatePage(transactionId);
       rightPageId = overallPage.allocatePage(transactionId);
     } catch (Exception e) {
-      exit(8);
+      return null;
     }
 
     /* set left page.*/
@@ -970,8 +940,7 @@ public class IndexPage extends Page {
     leftPage.freespaceStart.set(
         maxRecordInLeft.myOffset
             + metadata.getNonPrimaryKeyLength()
-            + metadata.getPrimaryKeyLength()
-            + 15);
+            + metadata.getPrimaryKeyLength());
 
     /* set right page.*/
     IndexPage rightPage = createIndexPage(transactionId, this.spaceId, rightPageId);
@@ -986,8 +955,7 @@ public class IndexPage extends Page {
     rightPage.freespaceStart.set(
         maxRecordInRight.myOffset
             + metadata.getNonPrimaryKeyLength()
-            + metadata.getPrimaryKeyLength()
-            + 15);
+            + metadata.getPrimaryKeyLength());
 
     RecordInPage leftPointerRecord = makePointerRecord(maxRecordInLeft, leftPageId);
     leftPointerRecord.myOffset = 64 + 4 + metadata.getNullBitmapLengthInByte();
@@ -1010,11 +978,6 @@ public class IndexPage extends Page {
     /* ******************************** BEGIN ATOMIC ********************* */
     infimumRecord.nextRecordInPage = leftPointerRecord;
     /* ******************************** END ATOMIC ********************* */
-
-    //    ServerRuntime.father.put(concat(this.spaceId, leftPageId), leftPointerRecord);
-    //    ServerRuntime.father.put(concat(this.spaceId, rightPageId), rightPointerRecord);
-    //    System.out.println("set " + this.pageId + " as father of " + leftPageId);
-    //    System.out.println("set " + this.pageId + " as father of " + rightPageId);
 
     leftPage.writeAll(transactionId);
     rightPage.writeAll(transactionId);
@@ -1056,10 +1019,6 @@ public class IndexPage extends Page {
           (OverallPage) IO.read(this.spaceId, ServerRuntime.config.overallPageIndex);
       rightPageId = overallPage.allocatePage(transactionId);
     } catch (Exception e) {
-
-      e.printStackTrace();
-      System.out.println("splitMyself: allocate new page.");
-      exit(10);
       return null;
     }
 
@@ -1073,8 +1032,6 @@ public class IndexPage extends Page {
             originalRecordsInPage.size() / 2,
             originalRecordsInPage.size());
     if (maxRecordInRight == null) {
-      System.out.println("splitMyself: maxRecordInRight is null.");
-      exit(11);
       return null;
     }
     maxRecordInRight.setNextRecordInPage(rightPageSupremeRecord);
@@ -1086,7 +1043,9 @@ public class IndexPage extends Page {
 
     if (this.pageReadAndWriteLatch == null) {
       rightPage.pageReadAndWriteLatch = null;
-      // TODO: update suite
+      DiskBuffer.recoverArea.get(DiskBuffer.concat(rightPage.spaceId, rightPage.pageId))
+              .pageReadAndWriteLatch =
+          null;
     } else {
       ServerRuntime.getWriteLock(transactionId, rightPage.pageReadAndWriteLatch, rightPage);
     }
@@ -1122,21 +1081,15 @@ public class IndexPage extends Page {
     int maxLength = metadata.getMaxRecordLength(RecordInPage.USER_POINTER_RECORD);
     IndexPage maybeParent = ancestors.pop();
 
-    //    System.out.println("first split myself" + pageId);
-    //    printStructrue(this);
-    //    System.out.println("----------------------------------");
-
-    if (!maybeParent.moveRightAndInsertPointer(
+    /* Ignore return value here. */
+    maybeParent.moveRightAndInsertPointer(
         transactionId,
         ancestors,
         maxLength,
         this.pageId,
         rightPageId,
         maxRecordInLeft,
-        maxRecordInRight)) {
-      System.out.println("The pointer record is missing for splitting process.");
-      exit(31);
-    }
+        maxRecordInRight);
 
     this.writeAll(transactionId);
     rightPage.writeAll(transactionId);
@@ -1283,8 +1236,7 @@ public class IndexPage extends Page {
     IndexPage maybeParent = this;
     Pair<Boolean, RecordInPage> insertResult;
     if (maybeParent.infimumRecord.nextRecordInPage.recordType != RecordInPage.USER_POINTER_RECORD) {
-      System.out.println("never shall happen!");
-      exit(15);
+      return false;
     }
 
     do {
@@ -1331,11 +1283,8 @@ public class IndexPage extends Page {
         try {
           maybeParent = (IndexPage) IO.read(this.spaceId, insertResult.right.nextAbsoluteOffset);
         } catch (Exception neverShallHappen) {
-          System.out.println(maybeParent.isRightest() + " " + insertResult);
-          System.out.println(neverShallHappen);
-          System.out.println("move right and insert pointer: IO.read");
-          // TODO: insertResult.right.nextAbsoluteOffset = 0? ???? tOFIX
-          exit(13);
+          previousPage.bLinkTreeLatch.unlock();
+          return false;
         }
         previousPage.bLinkTreeLatch.unlock();
       }
@@ -1445,7 +1394,6 @@ public class IndexPage extends Page {
       record = record.nextRecordInPage;
     }
     if (record.nextAbsoluteOffset == 0 || record.isRightest()) {
-
       return new Pair<>(false, previousRecord);
     } else {
       return new Pair<>(false, record);
@@ -1462,9 +1410,6 @@ public class IndexPage extends Page {
   public Pair<Boolean, RecordInPage> scanInternalForPage(long transactionId, int pageToFind) {
     RecordInPage record = infimumRecord.nextRecordInPage;
     while (record.recordType != RecordInPage.SYSTEM_SUPREME_RECORD) {
-      if (record.recordType == RecordInPage.USER_DATA_RECORD) {
-        exit(55);
-      }
       if (record.recordType == RecordInPage.USER_POINTER_RECORD) {
         if (record.childPageId == pageToFind) return new Pair<>(true, record);
       }
@@ -1504,8 +1449,7 @@ public class IndexPage extends Page {
       ServerRuntime.getWriteLock(transactionId, leftPage.pageReadAndWriteLatch, leftPage);
       firstSplitLock.unlock();
     } catch (Exception e) {
-      System.out.println(e);
-      exit(24);
+      return 0;
     }
     return 0;
   }
@@ -1534,9 +1478,7 @@ public class IndexPage extends Page {
       }
       record = record.nextRecordInPage;
     }
-
     bLinkTreeLatch.unlock();
-
     return record.nextAbsoluteOffset;
   }
 
@@ -1557,7 +1499,6 @@ public class IndexPage extends Page {
     if (this.infimumRecord.nextRecordInPage.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
       firstSplitLock.lock();
       if (this.infimumRecord.nextRecordInPage.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
-        // TODO
         IndexPage leftPage = null;
         try {
           leftPage = (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexLeftmostLeafIndex);
@@ -1587,8 +1528,8 @@ public class IndexPage extends Page {
           }
         }
       }
-      record = record.nextRecordInPage;
       previousRecord = record;
+      record = record.nextRecordInPage;
     }
 
     int compareResult = ValueWrapper.compareArray(previousRecord.primaryKeyValues, searchKey);
@@ -1611,7 +1552,6 @@ public class IndexPage extends Page {
     if (this.infimumRecord.nextRecordInPage.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
       firstSplitLock.lock();
       if (this.infimumRecord.nextRecordInPage.recordType == RecordInPage.SYSTEM_SUPREME_RECORD) {
-        // TODO
         IndexPage leftPage = null;
         try {
           leftPage = (IndexPage) IO.read(this.spaceId, ServerRuntime.config.indexLeftmostLeafIndex);

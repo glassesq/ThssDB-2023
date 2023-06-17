@@ -5,7 +5,7 @@ import cn.edu.thssdb.type.DataType;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 
-public class ValueWrapper implements Comparable<ValueWrapper> {
+public class ValueWrapper {
   /** raw bytes value */
   public byte[] bytes;
 
@@ -63,7 +63,7 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
     this.type = type;
     this.strLength = 0;
     this.bytes = new byte[0];
-    this.isNull = true;
+    this.isNull = isNull;
   }
 
   /**
@@ -93,7 +93,6 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
   }
 
   private void set(String string) {
-    // TODO: exception
     switch (type) {
       case INT:
         this.bytes = new byte[4];
@@ -145,11 +144,8 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
     }
   }
 
-  @Override
-  public int compareTo(ValueWrapper o) {
-    if (isNull && o.isNull) return 0;
-    if (isNull && !o.isNull) return -1;
-    if (!isNull && o.isNull) return 1;
+  public Integer compareTo(ValueWrapper o) {
+    if (isNull || o.isNull) return null;
     switch (type) {
       case INT:
         return Integer.compare(parseIntegerBig(), o.parseIntegerBig());
@@ -167,10 +163,10 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
     }
   }
 
-  public static int compareArray(ValueWrapper[] a, ValueWrapper[] b) {
+  public static Integer compareArray(ValueWrapper[] a, ValueWrapper[] b) {
     int i;
     for (i = 0; i < Math.min(a.length, b.length); i++) {
-      if (a[i].compareTo(b[i]) != 0) break;
+      if (a[i].compareTo(b[i]) == null || a[i].compareTo(b[i]) != 0) break;
     }
     if (i < Math.min(a.length, b.length)) return a[i].compareTo(b[i]);
     return a.length - b.length;
@@ -191,7 +187,6 @@ public class ValueWrapper implements Comparable<ValueWrapper> {
         | (bytes[3] & 0xFF);
   }
 
-  // TODO: test for unsigned and signed stuff
   public long parseLongBig() {
     return Integer.toUnsignedLong(
                 ((bytes[0] & 0xFF) << 24)

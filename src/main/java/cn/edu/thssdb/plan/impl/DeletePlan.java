@@ -25,10 +25,8 @@ public class DeletePlan extends LogicalPlan {
 
   public void initialization(Table.TableMetadata table) {
     this.tableMetadata = table;
-    //    System.out.println("delete initialization start");
-    //    System.out.println("useWhere = " + useWhere);
     if (useWhere) {
-      String keyName = L_where.columnName().getText();
+      String keyName = L_where.columnName().getText().toLowerCase();
       if (table == null)
         throw new IllegalArgumentException(
             "Table " + L_where.tableName().getText() + " not found in FROM clause.");
@@ -97,12 +95,14 @@ public class DeletePlan extends LogicalPlan {
   }
 
   public boolean checkCondition(ValueWrapper A, ValueWrapper B, SQLParser.ComparatorContext cmp) {
-    if (cmp.NE() != null && A.compareTo(B) != 0) return true;
-    if (cmp.EQ() != null && A.compareTo(B) == 0) return true;
-    if (cmp.LE() != null && A.compareTo(B) <= 0) return true;
-    if (cmp.LT() != null && A.compareTo(B) < 0) return true;
-    if (cmp.GE() != null && A.compareTo(B) >= 0) return true;
-    return cmp.GT() != null && A.compareTo(B) > 0;
+    Integer result = A.compareTo(B);
+    if (result == null) return false;
+    if (cmp.NE() != null && result.intValue() != 0) return true;
+    if (cmp.EQ() != null && result.intValue() == 0) return true;
+    if (cmp.LE() != null && result.intValue() <= 0) return true;
+    if (cmp.LT() != null && result.intValue() < 0) return true;
+    if (cmp.GE() != null && result.intValue() >= 0) return true;
+    return cmp.GT() != null && result.intValue() > 0;
   }
 
   public void deleteCondition(Table.TableMetadata table) throws Exception {
@@ -123,6 +123,7 @@ public class DeletePlan extends LogicalPlan {
     IndexPage rightpage;
     while (pageIter > 0) {
       rightpage = (IndexPage) IO.read(table.spaceId, pageIter);
+      System.out.println("pageIter: " + pageIter);
       pageIter = rightpage.deleteWithCondition(transactionId, condition, null);
     }
   }
@@ -134,7 +135,6 @@ public class DeletePlan extends LogicalPlan {
   }
 
   public void doDelete(long transactionId, Table.TableMetadata table) throws Exception {
-    // TODO: exception handle
     this.transactionId = transactionId;
     initialization(table);
     if (!useWhere) {

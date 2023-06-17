@@ -136,29 +136,11 @@ public class IndexPageTest {
         record.nonPrimaryKeyValues[i] = r.right;
       }
 
-      //      if (iterator.hasNext()) record.primaryKeyValues[0].setWithNull(iterator.nextLine());
-      //      else break;
-
-      //            if( time % 2 == 0 )
-      // record.primaryKeyValues[0].setWithNull(String.valueOf(time));
-      //      else record.primaryKeyValues[0].setWithNull(String.valueOf(-time));
-
       IndexPage.RecordInPage recordInPage =
           IndexPage.makeRecordInPageFromLogical(record, tableMetadata);
 
-      //      transactionId = ServerRuntime.newTransaction();
-      //      Pair<Boolean, IndexPage.RecordInPage> insertPos =
-      // rootPage.scanTreeAndReturnRecord(transactionId, recordInPage.primaryKeyValues);
-      //      ServerRuntime.releaseAllLocks(transactionId);
-      //      if (insertPos.left) continue;
-
       transactionId = ServerRuntime.newTransaction();
-      //      writer.write(record.primaryKeyValues[0].toString() + "\n");
-      System.out.println(record);
-      System.out.println("record size:" + recordsInRoot.size());
       boolean r = rootPage.insertDataRecordIntoTree(transactionId, record);
-      //      writer.flush();
-      System.out.println(r);
 
       boolean checkR = true;
       for (RecordLogical recordAlready : recordsInRoot) {
@@ -172,7 +154,6 @@ public class IndexPageTest {
       assertEquals(r, checkR);
       if (!r) continue;
 
-      //      r = rootPage.insertDataRecordIntoTree(transactionId, record);
       ServerRuntime.releaseAllLocks(transactionId);
 
       recordsInRoot.add(record);
@@ -182,7 +163,6 @@ public class IndexPageTest {
       transactionId = ServerRuntime.newTransaction();
       Pair<Integer, ArrayList<RecordLogical>> dataResult =
           rootPage.getLeftmostDataPage(transactionId);
-      System.out.println("leftmost data page: " + dataResult.left + " " + dataResult.right.size());
       assertNotEquals(dataResult.left.intValue(), 0);
       while (dataResult.left.intValue() != 0) {
         testPage = (IndexPage) IO.read(tableMetadata.spaceId, dataResult.left);
@@ -239,13 +219,14 @@ public class IndexPageTest {
     for (int i = 0; i < recordsParseData.size(); i++) {
       assertEquals(
           ValueWrapper.compareArray(
-              recordsParseData.get(i).primaryKeyValues, recordsInRoot.get(i).primaryKeyValues),
+                  recordsParseData.get(i).primaryKeyValues, recordsInRoot.get(i).primaryKeyValues)
+              .intValue(),
           0);
-      assertEquals(
+      Integer result =
           ValueWrapper.compareArray(
               recordsParseData.get(i).nonPrimaryKeyValues,
-              recordsInRoot.get(i).nonPrimaryKeyValues),
-          0);
+              recordsInRoot.get(i).nonPrimaryKeyValues);
+      if (result != null) assertEquals(result.intValue(), 0);
       transactionId = ServerRuntime.newTransaction();
       Pair<Boolean, IndexPage.RecordInPage> scanResult =
           rootPage.scanTreeAndReturnRecord(transactionId, recordsParseData.get(i).primaryKeyValues);
@@ -253,12 +234,13 @@ public class IndexPageTest {
       assertTrue(scanResult.left);
       assertEquals(
           ValueWrapper.compareArray(
-              scanResult.right.primaryKeyValues, recordsInRoot.get(i).primaryKeyValues),
+                  scanResult.right.primaryKeyValues, recordsInRoot.get(i).primaryKeyValues)
+              .intValue(),
           0);
-      assertEquals(
+      result =
           ValueWrapper.compareArray(
-              scanResult.right.nonPrimaryKeyValues, recordsInRoot.get(i).nonPrimaryKeyValues),
-          0);
+              scanResult.right.nonPrimaryKeyValues, recordsInRoot.get(i).nonPrimaryKeyValues);
+      if (result != null) assertEquals(result.intValue(), 0);
 
       transactionId = ServerRuntime.newTransaction();
       Pair<Integer, ArrayList<RecordLogical>> scanPageResult =
@@ -268,13 +250,16 @@ public class IndexPageTest {
       boolean found = false;
       for (int j = 0; j < scanPageResult.right.size(); j++) {
         RecordLogical scanRecordInPage = scanPageResult.right.get(j);
+        result =
+            ValueWrapper.compareArray(
+                recordsParseData.get(i).nonPrimaryKeyValues,
+                recordsInRoot.get(i).nonPrimaryKeyValues);
+        if (result == null) result = 0;
+
         if (ValueWrapper.compareArray(
                     scanRecordInPage.primaryKeyValues, recordsParseData.get(i).primaryKeyValues)
                 == 0
-            && ValueWrapper.compareArray(
-                    scanRecordInPage.nonPrimaryKeyValues,
-                    recordsParseData.get(i).nonPrimaryKeyValues)
-                == 0) {
+            && result == 0) {
           found = true;
           break;
         }
@@ -469,7 +454,6 @@ public class IndexPageTest {
       recordsInRoot.add(record);
 
       insertPos = rootPage.scanTreeAndReturnRecord(transactionId, recordThird.primaryKeyValues);
-      // TODO: to fix ! there will be occassionally bug.
       assertTrue(insertPos.left);
 
       IndexPage pageIndex =

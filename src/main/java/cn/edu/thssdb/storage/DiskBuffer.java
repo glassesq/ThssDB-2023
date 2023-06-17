@@ -28,8 +28,13 @@ public class DiskBuffer {
   public static class MemoryMonitor extends TimerTask {
     public void run() {
       System.out.println(
-          persistPage.size() + " " + recoverArea.size() + " " + buffer.estimatedSize());
-      System.out.println(Runtime.getRuntime().freeMemory());
+          "persist page:"
+              + persistPage.size()
+              + ", recover area size:"
+              + recoverArea.size()
+              + ", buffer size: "
+              + buffer.estimatedSize());
+      System.out.println("free memory:" + Runtime.getRuntime().freeMemory());
     }
   }
 
@@ -119,7 +124,6 @@ public class DiskBuffer {
           .build(
               key -> {
                 if (Runtime.getRuntime().freeMemory() <= ServerRuntime.config.warningMemory) {
-                  // TODO: refactor.
                   // better thread sleep control for memory limitation.
                   // replace busy waiting with something faster
                   System.gc();
@@ -132,7 +136,6 @@ public class DiskBuffer {
                     } else {
                       sleepTime = sleepTime * 2;
                     }
-                    System.out.println("sleep!");
                     Thread.sleep(sleepTime / 1000, sleepTime % 1000);
                     System.gc();
                   }
@@ -266,6 +269,7 @@ public class DiskBuffer {
     page.infimumRecord = sharedSuite.infimumRecord;
     page.maxPageId = sharedSuite.maxPageId;
     page.freespaceStart = sharedSuite.freespaceStart;
+    page.isDirty = sharedSuite.isDirty;
 
     return page;
   }

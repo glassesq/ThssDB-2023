@@ -15,7 +15,6 @@ public class Column {
   private boolean notNull = false;
   private int length;
   public boolean offPage = false;
-  // TODO: stored off page.
 
   JSONObject object;
 

@@ -106,12 +106,6 @@ public class InsertPlan extends LogicalPlan {
         result.add(value);
       }
 
-      // TODO: check for NOT NULL constraint
-      //      for (String value : result) {
-      //        System.out.print(value + " ");
-      //      }
-      //      System.out.println("****");
-
       results.add(result);
     }
     return results;

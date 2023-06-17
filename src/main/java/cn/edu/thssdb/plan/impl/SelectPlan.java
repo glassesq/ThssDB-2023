@@ -37,19 +37,14 @@ public class SelectPlan extends LogicalPlan {
   public long transactionId = -1;
 
   public void initialization(ArrayList<Table.TableMetadata> tables) {
-    //    System.out.println("initialization start");
-    // initialize res, colInTable
     res = new QueryResult();
     colInTable = new ArrayList<>();
-    //    System.out.println("useWhere = " + useWhere);
-    //    System.out.println(columns.size());
     for (SQLParser.ColumnFullNameContext column : columns) {
       res.columns.add(column.getText());
-      //      System.out.print(column.getText() + ',');
       for (Table.TableMetadata table : tables) {
         if (tables.size() == 1
             || table.name.toLowerCase().equals(column.tableName().getText().toLowerCase())) {
-          String keyName = column.columnName().getText();
+          String keyName = column.columnName().getText().toLowerCase();
           if (table.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + table.name + "'");
@@ -69,7 +64,7 @@ public class SelectPlan extends LogicalPlan {
           && t.name.toLowerCase().equals(L_where.tableName().getText().toLowerCase())) table = t;
       if (useJoin) {
         if (t.name.toLowerCase().equals(L_on.tableName().getText().toLowerCase())) {
-          String keyName = L_on.columnName().getText();
+          String keyName = L_on.columnName().getText().toLowerCase();
           if (t.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + t.name + "'");
@@ -77,7 +72,7 @@ public class SelectPlan extends LogicalPlan {
           L_queryCol = t.getColumnDetailByName(keyName);
         }
         if (t.name.toLowerCase().equals(R_on.tableName().getText().toLowerCase())) {
-          String keyName = R_on.columnName().getText();
+          String keyName = R_on.columnName().getText().toLowerCase();
           if (t.getColumnDetailByName(keyName) == null)
             throw new IllegalArgumentException(
                 "Column '" + keyName + "' not found in table '" + t.name + "'");
@@ -90,7 +85,7 @@ public class SelectPlan extends LogicalPlan {
     //    System.out.println("phase 2 over");
     if (!useWhere) return;
     // initialize queryCol, queryValue
-    String keyName = L_where.columnName().getText();
+    String keyName = L_where.columnName().getText().toLowerCase();
     if (table == null)
       throw new IllegalArgumentException(
           "Table " + L_where.tableName().getText() + " not found in FROM clause.");
@@ -132,8 +127,8 @@ public class SelectPlan extends LogicalPlan {
 
   private boolean addRowsWithLess(Pair<Integer, ArrayList<RecordLogical>> pageIter) {
     for (RecordLogical record : pageIter.right) {
-      if (record.primaryKeyValues[0].compareTo(queryValue) < 0)
-        res.rows.add(applyProjection(record));
+      Integer result = record.primaryKeyValues[0].compareTo(queryValue);
+      if (result != null && result.intValue() < 0) res.rows.add(applyProjection(record));
       else {
         if (cmp_where.LE() != null) res.rows.add(applyProjection(record));
         return true;
@@ -172,12 +167,14 @@ public class SelectPlan extends LogicalPlan {
   }
 
   public boolean checkCondition(ValueWrapper A, ValueWrapper B, SQLParser.ComparatorContext cmp) {
-    if (cmp.NE() != null && A.compareTo(B) != 0) return true;
-    if (cmp.EQ() != null && A.compareTo(B) == 0) return true;
-    if (cmp.LE() != null && A.compareTo(B) <= 0) return true;
-    if (cmp.LT() != null && A.compareTo(B) < 0) return true;
-    if (cmp.GE() != null && A.compareTo(B) >= 0) return true;
-    return cmp.GT() != null && A.compareTo(B) > 0;
+    Integer result = A.compareTo(B);
+    if (result == null) return false;
+    if (cmp.NE() != null && result.intValue() != 0) return true;
+    if (cmp.EQ() != null && result.intValue() == 0) return true;
+    if (cmp.LE() != null && result.intValue() <= 0) return true;
+    if (cmp.LT() != null && result.intValue() < 0) return true;
+    if (cmp.GE() != null && result.intValue() >= 0) return true;
+    return cmp.GT() != null && result.intValue() > 0;
   }
 
   public QueryResult getCondition(Table.TableMetadata table) throws Exception {
@@ -264,14 +261,11 @@ public class SelectPlan extends LogicalPlan {
     Pair<Table.TableMetadata, ArrayList<RecordLogical>> page = pages.get(iter);
     ArrayList<RecordLogical> allRecordLogical = page.right;
     String columnName = null;
-    if (useWhere) columnName = L_where.tableName().getText();
+    if (useWhere) columnName = L_where.tableName().getText().toLowerCase();
     for (RecordLogical record : allRecordLogical) {
       if (useWhere)
         if (columnName.toLowerCase().equals(page.left.name.toLowerCase())) {
-          //          System.out.println(L_where.getText());
           ValueWrapper recordValue = getRecordValue(record, queryCol.primary);
-          //          System.out.println(recordValue.toString() + cmp_where.getText() +
-          // queryValue.toString());
           if (!checkCondition(recordValue, queryValue, cmp_where)) continue;
         }
       if (useJoin) {

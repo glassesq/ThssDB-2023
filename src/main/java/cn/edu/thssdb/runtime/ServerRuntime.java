@@ -82,7 +82,6 @@ public class ServerRuntime {
    */
   public static void getWriteLock(
       long transactionId, ReentrantReadWriteLock lock, IndexPage tracePage) {
-    // TODO: save pages because of soft referenced cache.
     if (lock == null) return;
     persistPage.putIfAbsent(transactionId, new HashSet<>());
     persistPage.get(transactionId).add(tracePage);
@@ -101,11 +100,8 @@ public class ServerRuntime {
     if (config.serializable) {
       if (!persistPage.containsKey(transactionId)) persistPage.put(transactionId, new HashSet<>());
       persistPage.get(transactionId).add(tracePage);
-      //      getTwoPhaseLock(transactionId, lock.readLock());
-      /** to avoid deadlock in TransactionTest */
       getTwoPhaseLock(transactionId, lock.writeLock());
     } else {
-      // TODO: deadlock check
       lock.readLock().lock();
     }
   }
@@ -174,7 +170,6 @@ public class ServerRuntime {
    * @throws IllegalStateException the tablespace counter is exhausted.
    */
   public static int newTablespace() throws IllegalStateException {
-    // TODO: tablespace id can be reused
     int tid = tablespaceCounter.incrementAndGet();
     if (tid == Integer.MAX_VALUE) {
       throw new IllegalStateException("The tablespace id is exhausted. Out of capability.");
@@ -225,8 +220,6 @@ public class ServerRuntime {
    * @return absolute path of the tablespace file
    */
   public static String getTablespaceFile(int spaceId) {
-    // TODO: read from metadata.
-    // TODO: REPLACE FOR TEST
     return ServerRuntime.config.tablespacePath + "/tablespace" + spaceId + ".tablespace";
   }
 

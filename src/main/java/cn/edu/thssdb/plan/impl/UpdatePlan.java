@@ -43,7 +43,7 @@ public class UpdatePlan extends LogicalPlan {
     this.tableMetadata = table;
     //    System.out.println("useWhere = " + useWhere);
     if (useWhere) {
-      String keyName = L_where.columnName().getText();
+      String keyName = L_where.columnName().getText().toLowerCase();
       if (table == null)
         throw new IllegalArgumentException(
             "Table " + L_where.tableName().getText() + " not found.");
@@ -176,7 +176,8 @@ public class UpdatePlan extends LogicalPlan {
     //    System.out.println("update where primary equal!");
     if (updateSingleAndOnlyPrimary) {
       ValueWrapper[] queryKey = {queryValue};
-      if (queryValue.compareTo(valueToSet) == 0) {
+      Integer result = queryValue.compareTo(valueToSet);
+      if (result != null && result == 0) {
         /* update table set primaryKey = value where primaryKey = value */
         /* no work shall be done. */
         return true;
@@ -226,12 +227,14 @@ public class UpdatePlan extends LogicalPlan {
   }
 
   public boolean checkCondition(ValueWrapper A, ValueWrapper B, SQLParser.ComparatorContext cmp) {
-    if (cmp.NE() != null && A.compareTo(B) != 0) return true;
-    if (cmp.EQ() != null && A.compareTo(B) == 0) return true;
-    if (cmp.LE() != null && A.compareTo(B) <= 0) return true;
-    if (cmp.LT() != null && A.compareTo(B) < 0) return true;
-    if (cmp.GE() != null && A.compareTo(B) >= 0) return true;
-    return cmp.GT() != null && A.compareTo(B) > 0;
+    Integer result = A.compareTo(B);
+    if (result == null) return false;
+    if (cmp.NE() != null && result.intValue() != 0) return true;
+    if (cmp.EQ() != null && result.intValue() == 0) return true;
+    if (cmp.LE() != null && result.intValue() <= 0) return true;
+    if (cmp.LT() != null && result.intValue() < 0) return true;
+    if (cmp.GE() != null && result.intValue() >= 0) return true;
+    return cmp.GT() != null && result.intValue() > 0;
   }
 
   public boolean updateRecordList(ArrayList<IndexPage.RecordInPage> recordsToUpdate)

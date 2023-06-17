@@ -107,7 +107,6 @@ public class Page {
 
   /** parse FIL Header */
   protected void parseFILHeader() {
-    // TODO: check for CHECKSUM
     /* CHECKSUM FOR 4 BYTE */
     spaceId = parseIntegerBig(4);
     pageId = parseIntegerBig(8);
@@ -125,7 +124,6 @@ public class Page {
    */
   public void writeFILHeader(long transactionId) {
     byte[] newValue = new byte[32];
-    // TODO: checkSum
     newValue[4] = (byte) (spaceId >> 24);
     newValue[5] = (byte) (spaceId >> 16);
     newValue[6] = (byte) (spaceId >> 8);

@@ -109,54 +109,6 @@ public class IO {
     }
   }
 
-  /**
-   * checkpoint push all updates to log file, data file and metadata file
-   *
-   * @throws Exception IO error
-   */
-  public static void pushAndWriteCheckpoint() throws Exception {
-    if (config.useDummyLog) {
-      /* DO NOTHING! */
-      // TODO
-    } else {
-      //      writeLogFileLatch.lock();
-      //
-      //      /* make sure there will be no writing logs here. */
-      //      dirtyPageLatch.writeLock().lock();
-      //
-      //      HashSet<Long> shadows = new HashSet<>(dirtyPages);
-      //      for (Long spId : shadows) {
-      //        DiskBuffer.getFromBuffer(spId).pageWriteAndOutputLatch.lock();
-      //      }
-      //      dirtyPages.clear();
-      //
-      //      WriteLog.outputWriteLogToDisk(false);
-      //
-      //      dirtyPageLatch.writeLock().unlock();
-      //
-      //      /* output all dirty relevant pages to disk */
-      //      for (Long spId : shadows) {
-      //        DiskBuffer.output((int) (spId >> 32), spId.intValue());
-      //      }
-      //
-      //      // TODO: metadata Latch
-      //      /* output all metadata to disk */
-      //      FileOutputStream metadataStream = new FileOutputStream(config.MetadataFilename);
-      //
-      // metadataStream.write(ServerRuntime.metadataArray.toString().getBytes(StandardCharsets.UTF_8));
-      //      metadataStream.close();
-      //      // TODO: metadata Latch
-      //
-      //      /* write checkpoint */
-      //      WriteLog.WriteLogEntry entry = new WriteLog.WriteLogEntry(-1, CHECKPOINT_LOG);
-      //      stream = new FileOutputStream(ServerRuntime.config.WALFilename, true);
-      //      entry.writeToDisk();
-      //      stream.close();
-      //
-      //      writeLogFileLatch.unlock();
-    }
-  }
-
   public static void writeTransactionStart(long sessionId, long transactionId) {
     if (config.useDummyLog) {
       DummyLog.writeDummyLog(transactionId, "transaction start for session " + sessionId + ".");
@@ -237,8 +189,8 @@ public class IO {
   }
 
   /**
-   * transaction requests a commit TODO: this implementation is only for test. The current
-   * implementation is unsafe, incorrect and has poor performance.
+   * transaction requests a commit The current implementation is unsafe, incorrect and has poor
+   * performance.
    *
    * @param transactionId transaction
    */
@@ -246,14 +198,11 @@ public class IO {
     try {
       if (config.useDummyLog) {
         int stamp = DummyLog.writeDummyLog(transactionId, "transaction commit.");
-        if (DummyLog.checkCounter.get() < stamp)
-          pushWriteAheadLogOnly(/* TODO: transactionId (maybe not output all.) */ );
+        if (DummyLog.checkCounter.get() < stamp) pushWriteAheadLogOnly();
       } else {
         WriteLog.addSpecialLog(transactionId, WriteLog.COMMIT_LOG);
-        pushWriteAheadLogOnly(/* TODO: transactionId (maybe not output all.) */ );
+        pushWriteAheadLogOnly();
       }
-      /* FOR TEST ONLY */
-      pushAndWriteCheckpoint();
     } catch (Exception e) {
       e.printStackTrace();
       exit(63);

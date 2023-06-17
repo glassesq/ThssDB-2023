@@ -135,13 +135,11 @@ public class ValueWrapperTest {
       while (A.right.isNull) A = createSingleValueWrapperRandomly(column);
       Pair<String, ValueWrapper> B = createSingleValueWrapperRandomly(column); /* B is Null */
       while (!B.right.isNull) B = createSingleValueWrapperRandomly(column);
-      assertTrue(A.right.compareTo(B.right) > 0);
-      assertTrue(B.right.compareTo(A.right) < 0);
-      assertTrue(A.right.compareTo(A.right) == 0);
-      assertTrue(B.right.compareTo(B.right) == 0);
+      assertEquals(A.right.compareTo(B.right), null);
 
       for (int j = 0; j < 128; j++) {
         Pair<String, ValueWrapper> result = createSingleValueWrapperRandomly(column);
+        while (result.right.isNull) result = createSingleValueWrapperRandomly(column);
         assertEquals(result.left, result.right.toString());
 
         byte[] byteWithZero = new byte[result.right.bytes.length + 10];
@@ -155,8 +153,8 @@ public class ValueWrapperTest {
         assertEquals(result.left, fromByteValueWrapper.toString());
         ValueWrapper copyWrapper = new ValueWrapper(fromByteValueWrapper);
         assertEquals(result.left, copyWrapper.toString());
-        assertEquals(result.right.compareTo(fromByteValueWrapper), 0);
-        assertEquals(fromByteValueWrapper.compareTo(copyWrapper), 0);
+        assertEquals(result.right.compareTo(fromByteValueWrapper).intValue(), 0);
+        assertEquals(fromByteValueWrapper.compareTo(copyWrapper).intValue(), 0);
         ValueWrapper[] aList = new ValueWrapper[2];
         aList[0] = new ValueWrapper(copyWrapper);
         aList[1] = result.right;

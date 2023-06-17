@@ -35,7 +35,7 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
 
   @Override
   public LogicalPlan visitCreateDbStmt(SQLParser.CreateDbStmtContext ctx) {
-    return new CreateDatabasePlan(ctx.databaseName().getText());
+    return new CreateDatabasePlan(ctx.databaseName().getText().toLowerCase());
   }
 
   public LogicalPlan visitCommitStmt(SQLParser.CommitStmtContext ctx) {
@@ -48,7 +48,7 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
 
   @Override
   public LogicalPlan visitUseDbStmt(SQLParser.UseDbStmtContext ctx) {
-    return new UseDatabasePlan(ctx.databaseName().getText());
+    return new UseDatabasePlan(ctx.databaseName().getText().toLowerCase());
   }
 
   /**
@@ -61,7 +61,7 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
   @Override
   public LogicalPlan visitCreateTableStmt(SQLParser.CreateTableStmtContext ctx) {
     Table.TableMetadata tableMetadata = new Table.TableMetadata();
-    tableMetadata.prepare(ctx.tableName().getText(), ServerRuntime.newTablespace());
+    tableMetadata.prepare(ctx.tableName().getText().toLowerCase(), ServerRuntime.newTablespace());
 
     ArrayList<Column> columns = new ArrayList<>();
     ArrayList<String> names = new ArrayList<>();
@@ -70,7 +70,7 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
     HashMap<String, Column> temporaryMapColumn = new HashMap<>();
 
     for (SQLParser.ColumnDefContext columnContext : ctx.columnDef()) {
-      String name = columnContext.columnName().getText();
+      String name = columnContext.columnName().getText().toLowerCase();
       String strType = columnContext.typeName().getText();
       DataType type = Column.str2DataType(strType);
       int length = 0;
@@ -100,7 +100,7 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
 
     int order = 0;
     for (SQLParser.ColumnNameContext columnNameContext : tableCTX.columnName()) {
-      Column column = temporaryMapColumn.get(columnNameContext.getText());
+      Column column = temporaryMapColumn.get(columnNameContext.getText().toLowerCase());
       if (column == null) {
         /* ill-format like create table x(id int, primary key(notExists) );*/
         return new CreateTablePlan(true);
@@ -124,16 +124,16 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
   }
 
   public LogicalPlan visitDropTableStmt(SQLParser.DropTableStmtContext ctx) {
-    return new DropTablePlan(ctx.tableName().getText());
+    return new DropTablePlan(ctx.tableName().getText().toLowerCase());
   }
 
   public LogicalPlan visitInsertStmt(SQLParser.InsertStmtContext ctx) {
-    String tableName = ctx.tableName().getText();
+    String tableName = ctx.tableName().getText().toLowerCase();
 
     List<SQLParser.ColumnNameContext> columnNames = ctx.columnName();
     ArrayList<String> columnName = new ArrayList<>();
     for (SQLParser.ColumnNameContext column : columnNames) {
-      columnName.add(column.getText());
+      columnName.add(column.getText().toLowerCase());
     }
 
     List<SQLParser.ValueEntryContext> valueEntries = ctx.valueEntry();
@@ -162,13 +162,14 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
 
     // FROM *
     boolean useJoin = false;
-    SQLParser.TableQueryContext tableQuery = (SQLParser.TableQueryContext) ctx.tableQuery(0);
+    SQLParser.TableQueryContext tableQuery = ctx.tableQuery(0);
     List<SQLParser.TableNameContext> tableQueryNames = tableQuery.tableName();
     if (tableQueryNames.size() > 1) useJoin = true;
 
     // JOIN *
     ArrayList<String> tableNames = new ArrayList<>();
-    for (SQLParser.TableNameContext name : tableQueryNames) tableNames.add(name.getText());
+    for (SQLParser.TableNameContext name : tableQueryNames)
+      tableNames.add(name.getText().toLowerCase());
 
     // ON *
     SQLParser.ConditionContext condition_on =
@@ -183,11 +184,11 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
   }
 
   public LogicalPlan visitShowTableStmt(SQLParser.ShowTableStmtContext ctx) {
-    return new ShowTablePlan(ctx.tableName().getText());
+    return new ShowTablePlan(ctx.tableName().getText().toLowerCase());
   }
 
   public LogicalPlan visitDeleteStmt(SQLParser.DeleteStmtContext ctx) {
-    String tableName = ctx.tableName().getText();
+    String tableName = ctx.tableName().getText().toLowerCase();
 
     boolean useWhere = ctx.K_WHERE() != null;
     SQLParser.ConditionContext condition_where =
@@ -197,9 +198,9 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
   }
 
   public LogicalPlan visitUpdateStmt(SQLParser.UpdateStmtContext ctx) {
-    String tableName = ctx.tableName().getText();
+    String tableName = ctx.tableName().getText().toLowerCase();
 
-    String columnNameToSet = ctx.columnName().getText();
+    String columnNameToSet = ctx.columnName().getText().toLowerCase();
 
     String valueToSet = ctx.expression().comparer().getText();
 
@@ -211,9 +212,7 @@ public class ThssDBSQLVisitor extends SQLBaseVisitor<LogicalPlan> {
   }
 
   public LogicalPlan visitDropDbStmt(SQLParser.DropDbStmtContext ctx) {
-    String databaseName = ctx.databaseName().getText();
+    String databaseName = ctx.databaseName().getText().toLowerCase();
     return new DropDatabasePlan(databaseName);
   }
-
-  // TODO: parser to more logical plan
 }

@@ -6,13 +6,6 @@ import cn.edu.thssdb.runtime.ServerRuntime;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class OverallPage extends Page {
-  /* Tablespace Header */
-
-  //  public int maxInitedPage;
-
-  //  public int currentDataPage;
-
-  public int flags;
 
   public OverallPage(byte[] bytes) {
     super(bytes);
@@ -40,12 +33,9 @@ public class OverallPage extends Page {
 
   private void parseTablespace() {
     if (maxPageId == null) {
-      //      exit(69);
       maxPageId = new AtomicInteger();
     }
     maxPageId.set(parseIntegerBig(32));
-    //    flags = parseIntegerBig(32 + 16);
-    /* RESERVED FOR 52 bytes */
   }
 
   /**
@@ -54,26 +44,13 @@ public class OverallPage extends Page {
    * @param transactionId transactionId requests the method
    */
   public void writeTablespace(long transactionId) {
-    /* First 16 valid bytes */
-    byte[] newValue = new byte[16];
+    byte[] newValue = new byte[4];
     int value = maxPageId.get();
     newValue[0] = (byte) (value >> 24);
     newValue[1] = (byte) (value >> 16);
     newValue[2] = (byte) (value >> 8);
     newValue[3] = (byte) value;
-    //    newValue[4] = (byte) (maxInitedPage >> 24);
-    //    newValue[5] = (byte) (maxInitedPage >> 16);
-    //    newValue[6] = (byte) (maxInitedPage >> 8);
-    //    newValue[7] = (byte) maxInitedPage;
-    //    newValue[8] = (byte) (currentDataPage >> 24);
-    //    newValue[9] = (byte) (currentDataPage >> 16);
-    //    newValue[10] = (byte) (currentDataPage >> 8);
-    //    newValue[11] = (byte) currentDataPage;
-    newValue[12] = (byte) (flags >> 24);
-    newValue[13] = (byte) (flags >> 16);
-    newValue[14] = (byte) (flags >> 8);
-    newValue[15] = (byte) flags;
-    IO.write(transactionId, this, 32, 16, newValue, false);
+    IO.write(transactionId, this, 32, 4, newValue, false);
   }
 
   /**
@@ -82,10 +59,7 @@ public class OverallPage extends Page {
    * @return allocated pageId.
    */
   public int allocatePage(long transactionId) throws Exception {
-    //    System.out.println( "################################# allocate new page: try for " +
-    // transactionId + " in space:" + spaceId);
     int allocatedPageId = maxPageId.incrementAndGet();
-    System.out.println("################################# allocate new page: " + allocatedPageId);
     writeTablespace(transactionId);
     return allocatedPageId;
   }

@@ -229,8 +229,7 @@ public class Client {
   }
 
   private static void showHelp() {
-    // TODO: test this with something like ./client -help
-    println("DO IT YOURSELF");
+    println("TODO: show help");
   }
 
   private static void echoStarting() {
