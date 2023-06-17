@@ -283,7 +283,7 @@ public class IndexPageTest {
     ArrayList<Column> columns = new ArrayList<>();
     ArrayList<String> names = new ArrayList<>();
     ArrayList<Integer> orders = new ArrayList<>();
-    int primaryKeyNumber = 1;
+    int primaryKeyNumber = 10;
     int nonPrimaryKeyNumber = 10;
     for (int i = 0; i < primaryKeyNumber + nonPrimaryKeyNumber; i++) {
       Column column = new Column();

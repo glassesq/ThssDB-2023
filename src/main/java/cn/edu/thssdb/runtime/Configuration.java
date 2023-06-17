@@ -38,15 +38,14 @@ public class Configuration {
 
   public final int maxCharsetLength = 4;
 
-  public boolean useDummyLog;
+  public boolean useDummyLog = true;
 
   public boolean recoverFromDummyLog;
 
   public Configuration() {
     allow_implicit_transaction = true;
     auto_commit = true;
-    serializable = false;
-    useDummyLog = true;
-    recoverFromDummyLog = false;
+    serializable = true;
+    recoverFromDummyLog = true;
   }
 }

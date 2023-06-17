@@ -209,9 +209,7 @@ public class SessionRuntime {
           results = insertPlan.getValues(table);
         } catch (Exception e) {
           e.printStackTrace();
-          response =
-              new ExecuteStatementResp(
-                  StatusUtil.fail("Table " + insertPlan.tableName + " not found."), false);
+          response = new ExecuteStatementResp(StatusUtil.fail("Value Not Allowed!"), false);
           break;
         }
         boolean insertResult = true;

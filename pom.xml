@@ -97,9 +97,6 @@
                 <artifactId>maven-assembly-plugin</artifactId>
                 <version>3.3.0</version>
                 <configuration>
-                    <descriptors>
-                        <descriptor>src/main/assembly.xml</descriptor>
-                    </descriptors>
                     <archive>
                         <manifest>
                             <mainClass>cn.edu.thssdb.server.ThssDB</mainClass> <!-- 指定主类 -->

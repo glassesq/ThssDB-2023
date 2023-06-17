@@ -1473,6 +1473,7 @@ public class IndexPage extends Page {
           if (record.isNotDeleted()) {
             record.setDeleted();
             if (recordsDeleted != null) recordsDeleted.add(record);
+            record.write(transactionId, this, record.myOffset);
           }
         }
       }

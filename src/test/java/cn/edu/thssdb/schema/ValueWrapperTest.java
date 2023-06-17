@@ -23,7 +23,7 @@ public class ValueWrapperTest {
   public void setup() throws Exception {
     System.out.println("maximum memory: " + Runtime.getRuntime().maxMemory());
     System.out.println(" ##### START TEST");
-    ServerRuntime.config.testPath = "./testOnly";
+    ServerRuntime.config.testPath = "./testOnly" + ThreadLocalRandom.current().nextInt();
     ServerRuntime.config.MetadataFilename = ServerRuntime.config.testPath + "/example.json";
     ServerRuntime.config.WALFilename = ServerRuntime.config.testPath + "/WAL.log";
     ServerRuntime.config.DummyLogFilename = ServerRuntime.config.testPath + "/dummy.log";
